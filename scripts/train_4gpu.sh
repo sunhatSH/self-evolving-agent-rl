@@ -88,4 +88,18 @@ echo "[train_4gpu] cwd=$ROOT  config=$CFG"
 echo "[train_4gpu] cmd: $PY -m trainer.agent_rl_main --config $CFG $*"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-exec "$PY" -m trainer.agent_rl_main --config "$CFG" "$@"
+# ── Ray head: verl run_ppo uses ray.init(address='auto') so a cluster must
+#    already exist. Start a FRESH single-node head (stopping any stale one that
+#    might report 0 GPUs from a time the cards were busy), run, then stop it.
+RAY="$(dirname "$PY")/ray"
+echo "[train_4gpu] (re)starting single-node Ray head with 4 GPUs"
+"$RAY" stop --force >/dev/null 2>&1 || true
+"$RAY" start --head --disable-usage-stats --num-gpus 4 || { echo "[train_4gpu] FATAL: ray start failed" >&2; exit 1; }
+
+set +e
+"$PY" -m trainer.agent_rl_main --config "$CFG" "$@"
+_rc=$?
+set -e
+echo "[train_4gpu] training exited rc=$_rc; ray stop"
+"$RAY" stop --force >/dev/null 2>&1 || true
+exit "$_rc"

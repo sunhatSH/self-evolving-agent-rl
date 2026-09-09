@@ -71,7 +71,9 @@ actor_rollout_ref:
     gpu_memory_utilization: 0.6         # conservative on 68G cards (single-node debug)
     n: 4                                # traj/query (GRPO group). Modest for debug.
     load_format: auto
-    max_model_len: 32768
+    max_model_len: 65536                # Hermes Agent requires >=64K context (else
+                                        #   "context window 32768 below minimum 64000"
+                                        #   -> every rollout empty). prompt+response fit easily.
     max_num_batched_tokens: 6144
     enable_chunked_prefill: false
     calculate_log_probs: true           # rollout returns logprobs -> old_log_prob (PPO clip/ppo_kl live)
