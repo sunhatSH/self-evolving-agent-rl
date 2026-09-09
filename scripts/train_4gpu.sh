@@ -20,6 +20,8 @@
 #   MODEL_PATH   — small local model (default: /mnt/afs_toolcall/sunhao4/models/Qwen3.5-9B)
 #   TRAIN_FILES  — train parquet   (left to config default unless exported)
 #   VAL_FILES    — val parquet     (left to config default unless exported)
+#   VERL_DIR     — verl checkout   (default: /mnt/afs_toolcall/sunhao4/dependencies/verl)
+#   LIGHTLLM_DIR — LightLLM checkout (default: /mnt/afs_toolcall/sunhao4/workspace/LightLLM)
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -38,17 +40,28 @@ export MODEL_PATH="${MODEL_PATH:-/mnt/afs_toolcall/sunhao4/models/Qwen3.5-9B}"
 # TRAIN_FILES / VAL_FILES intentionally left to the config default unless the
 # caller exports them — no small debug parquet is hardcoded here.
 
-# ── training python (has torch/verl) + PYTHONPATH (src + repo root) ──────────
+# ── training python + dependency checkouts (verl/lightllm are NOT pip-installed;
+#    they live as source trees injected via PYTHONPATH, same as _train_impl.sh) ─
 PY="/opt/conda/bin/python3"
-export PYTHONPATH="src:.${PYTHONPATH:+:$PYTHONPATH}"
+VERL_DIR="${VERL_DIR:-/mnt/afs_toolcall/sunhao4/dependencies/verl}"
+LIGHTLLM_DIR="${LIGHTLLM_DIR:-/mnt/afs_toolcall/sunhao4/workspace/LightLLM}"
+export PYTHONPATH="$LIGHTLLM_DIR:$VERL_DIR:$ROOT/src:$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 cd "$ROOT"
+
+# Register our verl external modules (rollout manager FQN + stability patches)
+# the same way the full trainer does. Best-effort: harmless if absent.
+if [ -f "$DIR/env/verl_external_modules.sh" ]; then
+  # shellcheck disable=SC1090
+  source "$DIR/env/verl_external_modules.sh" || true
+fi
 
 # ── resolved command (printed before running) ───────────────────────────────
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "[train_4gpu] 4-step smoke (validate loop, NOT for results)"
 echo "[train_4gpu] CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
 echo "[train_4gpu] MODEL_PATH=$MODEL_PATH"
+echo "[train_4gpu] VERL_DIR=$VERL_DIR  LIGHTLLM_DIR=$LIGHTLLM_DIR"
 echo "[train_4gpu] PYTHONPATH=$PYTHONPATH"
 echo "[train_4gpu] cwd=$ROOT  config=$CFG"
 echo "[train_4gpu] cmd: $PY -m trainer.agent_rl_main --config $CFG $*"

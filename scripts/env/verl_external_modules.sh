@@ -46,7 +46,7 @@
 export VERL_USE_EXTERNAL_MODULES="${VERL_USE_EXTERNAL_MODULES:-recipe_custom.bootstrap}"
 # 都必须在 worker 进程生效（patch 目标都在 worker/lightllm 副本），故走 VERL_USE_EXTERNAL_MODULES
 # 而非 driver-only import。逐个幂等去重。
-for _mod in rollout.e2b_http1_patch trainer.observer_hook_register trainer.pause_generation_bounded_patch trainer.dataproto_tensordict_patch trainer.empty_batch_skip_patch trainer.efficient_entropy_num_tokens_patch trainer.policy_loss_padding_patch trainer.sp_gather_empty_patch trainer.replay_num_tokens_patch; do
+for _mod in rollout.e2b_http1_patch trainer.observer_hook_register trainer.pause_generation_bounded_patch trainer.dataproto_tensordict_patch trainer.empty_batch_skip_patch trainer.efficient_entropy_num_tokens_patch trainer.policy_loss_padding_patch trainer.sp_gather_empty_patch; do
   case ",$VERL_USE_EXTERNAL_MODULES," in
     *,"$_mod",*) : ;;  # 已含,不重复追加
     *) export VERL_USE_EXTERNAL_MODULES="$VERL_USE_EXTERNAL_MODULES,$_mod" ;;
