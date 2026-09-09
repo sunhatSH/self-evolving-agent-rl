@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# 评测脚本 1：对单个模型跑 ClawEval 195 题 + 算 pass@N / 均分 / 按桶
+#
+# 用法：
+#   bash scripts/eval_model.sh <model_path> [output_name] [num_runs]
+#
+# 参数：
+#   model_path   — HF 格式模型路径（基座或 merge 后的 ckpt）
+#   output_name  — 输出目录名（默认 = model_path 的 basename）
+#   num_runs     — Pass^N 的 N（默认 3）
+#
+# GPU 规模（env）：
+#   GPU_MODE=16gpu（默认）— 2节点×8卡，SP=4/DP=4，rollout_TP=2，gateway/workers=8
+#   GPU_MODE=4gpu          — 单机 4 卡，SP=4/DP=1，rollout_TP=2，gateway/workers=4，gpu_mem=0.75
+#                            （对齐 scripts/train_4gpu.sh 的 4 卡机制层，只是评测不训练）
+#   也可直接 NNODES=/GPUS_PER_NODE= 手动覆盖；GPU_MODE=4gpu 会预设为 1/4。
+#
+# 示例：
+#   # 评基座（16 卡默认）
+#   bash scripts/eval_model.sh /mnt/afs_toolcall/sunhao4/models/Qwen3.5-9B base
+#   # 4 卡评基座
+#   GPU_MODE=4gpu bash scripts/eval_model.sh /mnt/afs_toolcall/sunhao4/models/Qwen3.5-9B base
+#   # 评某个 checkpoint（先 merge）
+#   bash scripts/eval_model.sh /tmp/merged_hf_cl2r_cl_200 cl2r_cl_step200
+#
+# 输出：eval/results/<output_name>/
+#   per_task.json  — 每题四维打分（cl_eval 输出）
+#   scores.json    — 聚合：pass@N / 均分 / 按桶 / 与 baseline 对比（如有）
+# ─────────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PY="/opt/conda/bin/python"
+# ray CLI 与训练 python 同装在 /opt/conda/bin，但该目录未必在 PATH 上（tmux 无 login
+# shell）→ 用绝对路径，别依赖裸 `ray`（否则 command not found）。
+RAY_BIN="$(dirname "$PY")/ray"
+export PATH="$(dirname "$PY"):${PATH:-}"
+VERL_DIR="/mnt/afs_toolcall/sunhao4/dependencies/verl"
+LIGHTLLM_DIR="/mnt/afs_toolcall/sunhao4/workspace/LightLLM"
+export PYTHONPATH="$LIGHTLLM_DIR:$VERL_DIR:$ROOT_DIR/src:$ROOT_DIR:${PYTHONPATH:-}"
+
+# ★ 外部 patch 模块清单（与训练同一份）：评测 rollout 走的也是 AgentSessionWorker，
+# 其 create_hook 要认 FQN hook trainer.observer_hook.ObserverDiffHook（agent_loop_config.yaml
+# 挂的）。不 source 则 worker 不 import observer_hook_register → 每 session ValueError:
+# Unknown post-run hook → 全 abort（2026-08-26 评测全灭根因）。verl_runner.run_cl_eval 会把
+# VERL_USE_EXTERNAL_MODULES 经 runtime_env 透传给所有 Ray worker。
+source "$ROOT_DIR/scripts/env/verl_external_modules.sh"
+
+MODEL_PATH="${1:?用法: bash scripts/eval_model.sh <model_path> [output_name] [num_runs]}"
+OUT_NAME="${2:-$(basename "$MODEL_PATH")}"
+NUM_RUNS="${3:-3}"
+
+# GPU 规模（16gpu 默认 / 4gpu）→ 设 NNODES/GPUS_PER_NODE + EVAL_GPU_OVERRIDES
+source "$ROOT_DIR/scripts/env/eval_gpu_overrides.sh"
+
+OUT_DIR="$ROOT_DIR/eval/results/$OUT_NAME"
+mkdir -p "$OUT_DIR"
+
+echo "=== 评测: $MODEL_PATH → $OUT_DIR (Pass^$NUM_RUNS) ==="
+
+# 凭证
+source "$ROOT_DIR/scripts/env/load_tencent_env.sh" 2>/dev/null || true
+source "$ROOT_DIR/scripts/env/load_training_env.sh" 2>/dev/null || true
+
+# 起 Ray
+RAY_CPUS="${CL_RAY_NUM_CPUS:-$(nproc 2>/dev/null || echo 128)}"
+"$RAY_BIN" start --head --disable-usage-stats --num-cpus "$RAY_CPUS"
+
+# 跑 cl_eval（复用训练 RemoteAgentLoopManager）
+"$PY" -m trainer.cl_eval \
+  --config "$ROOT_DIR/configs/run/r0-25k_9b_16gpu.yaml" \
+  --tasks-file "$ROOT_DIR/src/eval/claweval_manifest.json" \
+  --output "$OUT_DIR/per_task.json" \
+  --num-runs "$NUM_RUNS" \
+  actor_rollout_ref.model.path="$MODEL_PATH" \
+  cl.buffer.enabled=false \
+  trainer.nnodes="$NNODES" trainer.n_gpus_per_node="$GPUS_PER_NODE" \
+  "${EVAL_GPU_OVERRIDES[@]}"
+
+"$RAY_BIN" stop --force >/dev/null 2>&1 || true
+
+# 聚合结果
+echo "=== 聚合评测结果 ==="
+BASELINE_FILE="$ROOT_DIR/eval/results/base/per_task.json"
+if [ -f "$BASELINE_FILE" ] && [ "$OUT_NAME" != "base" ]; then
+  "$PY" -m eval.aggregate --results "$OUT_DIR/per_task.json" --baseline "$BASELINE_FILE" --output "$OUT_DIR/scores.json"
+else
+  "$PY" -m eval.aggregate --results "$OUT_DIR/per_task.json" --output "$OUT_DIR/scores.json"
+fi
+
+echo "✅ 评测完成: $OUT_DIR/scores.json"

@@ -1,0 +1,106 @@
+"""Observation-grounded reward -- doc §3.3 要点 4 / §6 / §7.4 / O4.
+
+This is the third agent. It does NOT reimplement judge I/O: it reuses
+``trainer.model_reward.JudgeClient`` (the OpenAI-compatible frozen judge already
+wired into verl's custom_reward_function) and only adds the observation-grounded
+rubric/prompt the design left blank (O4).
+
+The judge sees TWO channels, both carried by the one R_t packet:
+  - the observer's STATE evidence (deterministic ``state_diff``) -> ground truth for
+    completion; anchors reward in the real effect;
+  - ``report.actor_trajectory`` -> the actor's actions, carried PASS-THROUGH by the
+    observer component (the observer MODEL never sees it -- no token waste) -> used
+    to judge safety / robustness (how the agent acted).
+
+Gating (the "几层拦截"): if the turn produced NO effect (empty diff,
+``report.has_effect`` False), we SHORT-CIRCUIT and return a zero score WITHOUT
+calling the judge -- a turn that changed nothing gets completion 0 for free, and
+the expensive judge round-trip is skipped.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from agents.prompts import build_reward_judge_input
+from agents.schema import ObservationReport
+
+# Zero verdict for a no-effect turn: nothing produced -> not correct; nothing
+# harmful happened -> safety 1; no process to grade -> trajectory 0.
+_NO_EFFECT_VERDICT = {
+    "score": 0.0,
+    "correctness": 0.0,
+    "trajectory": 0.0,
+    "safety": 1.0,
+    "judge_error": 0.0,
+    "gated": 1.0,
+}
+
+
+def score_followup(
+    *,
+    query: str,
+    report: ObservationReport,
+    judge: Any = None,
+    data_source: str = "usersim_followup",
+) -> dict[str, float]:
+    """Score a follow-up turn on the observer's state diff + the pass-through trajectory.
+
+    Everything comes from the one ``report`` packet: ``state_diff`` (correctness
+    ground truth) and ``actor_trajectory`` (the actor's actions, carried pass-through
+    by the observer for the trajectory/safety judge). Reuses model_reward's judge +
+    aggregation so the reward scale matches training (formula:
+    reward = (0.6*trajectory + 0.4*correctness) * safety).
+    The judge model is resolved from REWARD_API_BASE / REWARD_MODEL env unless injected.
+
+    Returns the same dict shape as ``model_reward.compute_score``
+    ({score, correctness, trajectory, safety, judge_error, discard} + process
+    sub-dims); a gated/no-effect turn additionally carries ``gated=1.0``. On a judge
+    failure that survived the retry, ``discard=1.0`` and score 0 (caller drops the row).
+    """
+    # Gate: no usable evidence this turn -> don't call the judge at all.
+    # Use is_empty() (deliverable-aware) NOT the raw has_effect flag: a text
+    # deliverable (QA/reasoning) folds the reply into report.final with
+    # has_effect possibly False (no FS/sys change). Gating on has_effect alone
+    # forced reward 0 for every text-only task -> zero GRPO advantage on entire
+    # buckets (silent collapse). is_empty() returns False whenever final/
+    # intermediate carry a real deliverable, so those tasks now reach the judge.
+    if report.is_empty():
+        return dict(_NO_EFFECT_VERDICT)
+
+    from trainer.model_reward import (
+        _DIM_DEFAULTS,
+        _TRAJ_DEFAULTS,
+        _binarize,
+        _clamp01,
+        aggregate,
+        get_judge,
+        score_dual,
+    )
+
+    parts = build_reward_judge_input(query=query, report=report)
+    client = judge if judge is not None else get_judge()
+
+    # Two concurrent judge calls (main 3-dim + trajectory 5-dim), folded by
+    # score_dual into one verdict whose "trajectory" key is the weighted scalar.
+    verdict, judge_error = score_dual(
+        client,
+        task=parts["task"],
+        trajectory=parts["trajectory"],
+        main_rubric=parts["rubric"],
+        traj_rubric=parts["trajectory_rubric"],
+        data_source=data_source,
+    )
+
+    return {
+        "score": 0.0 if judge_error else float(aggregate(verdict)),
+        "correctness": _clamp01(verdict.get("correctness", _DIM_DEFAULTS["correctness"])),
+        "trajectory": _clamp01(verdict.get("trajectory", 0.0)),
+        "safety": _binarize(verdict.get("safety", _TRAJ_DEFAULTS["safety"])),
+        "efficiency": _clamp01(verdict.get("efficiency", _TRAJ_DEFAULTS["efficiency"])),
+        "planning": _clamp01(verdict.get("planning", _TRAJ_DEFAULTS["planning"])),
+        "consistency": _clamp01(verdict.get("consistency", 0.0)),
+        "recovery": _clamp01(verdict.get("recovery", _TRAJ_DEFAULTS["recovery"])),
+        "judge_error": judge_error,
+        "discard": judge_error,  # 1.0 -> caller sets reward=None (masked, not scored 0)
+    }
