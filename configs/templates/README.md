@@ -56,11 +56,11 @@ templates/
 分层重构必须**行为不变**。把 `run/<exp>.yaml` 改成 defaults 组合后,对比 effective config:
 
 ```python
-from trainer.cl_main import load_config
+from trainer.agent_rl_main import load_config
 from omegaconf import OmegaConf
 a = OmegaConf.to_container(load_config("configs/run/<exp>.yaml"), resolve=False)
 # 与重构前快照逐字段 diff,必须 0 处差异才算等价
 ```
 
-`load_config`(`trainer/cl_main.py:61`)按 `defaults` 顺序 `OmegaConf.merge`,后引用的文件覆盖前者;
+`load_config`(`src/trainer/agent_rl_main.py`)按 `defaults` 顺序 `OmegaConf.merge`,后引用的文件覆盖前者;
 本文件 body 覆盖所有 defaults。这正是三层能干净叠加的机制。

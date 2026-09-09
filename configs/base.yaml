@@ -20,13 +20,8 @@ actor_rollout_ref:
   # Base model -- Qwen3.6-27B (https://huggingface.co/Qwen/Qwen3.6-27B).
   # Override `path` to a local cache (e.g. /mnt/afs/models/qwen3.6-27b/).
   #
-  # ★ 训练起点 = π₀（初始 Qwen3.6-27B），所有 21 实验 + baseline 一致（2026-07-04 定案）。
-  #   禁止把某个 phase 的 model.path 改成"接上个 phase 选中的 ckpt"——那会污染
-  #   ablation 可比性（分不清是本 phase 参数好还是继承的底子好）。上个 phase 只传
-  #   "选中的超参配置"（λ2 / replay 类型），不传权重。"局部最优拼起来不优"由 Phase 4
-  #   组合验证兜底。详见 doc/eval/训练与评测总思路_产物结构.md §2.3。
-  #   注意区分：model.path = 训练起点（恒 = π₀）；ref.path = KL 锚点 π_ref（K4/K5 才用
-  #   π_{t-1}，那只影响 KL 往哪拉，不影响训练起点）。
+  # ★ 训练起点 = π₀（初始 Qwen3.6-27B）。
+  #   注意区分：model.path = 训练起点；ref.path = KL 锚点 π_ref。
   model:
     path: /mnt/afs_agents/share_models/Qwen/Qwen3.6-27B   # π₀ 本地权重(非 HF 名);cluster 覆盖为 /tmp/qwen36
 
@@ -118,13 +113,13 @@ trainer:
   save_freq: 25
   test_freq: 25
   project_name: self-evolving-agent-rl   # swanlab 项目名
-  # experiment_name: 各 phaseN/exp.yaml 覆盖（如 b1 / r4），verl 据此建 swanlab run
+  # experiment_name: run/*.yaml 覆盖，verl 据此建 swanlab run
   # logger 用字面 list（不用 ${oc.decode:...} 插值）：oc.decode 按 OmegaConf 设计只能返回
   # 标量，返回 list 会在 verl_runner 的 OmegaConf.resolve 阶段报 UnsupportedValueType。
-  # 想切后端就改这行；各实验 config 可覆盖（如 b1_9b 只留 [console]）。
+  # 想切后端就改这行；各实验 config 可覆盖（如 debug 只留 [console]）。
   logger: [console, swanlab]   # SWANLAB_API_KEY via load_training_env.sh
   # 全量记录（正式训练）：验证生成文本记 SwanLab + rollout/val 文本落盘。
-  # 路径由 run_phases.sh 按实验注入 logs/experiments/<phase>/<exp>/{rollout,val}；
+  # 路径由启动脚本按实验注入 logs/experiments/<exp>/{rollout,val}；
   # 不设 env 时为 null（本地 debug 不强制落盘）。
   log_val_generations: 50
   rollout_data_dir: ${oc.decode:${oc.env:ROLLOUT_DATA_DIR,null}}

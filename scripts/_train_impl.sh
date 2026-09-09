@@ -22,7 +22,7 @@ VERL_DIR="/mnt/afs_toolcall/sunhao4/dependencies/verl"
 LIGHTLLM_DIR="/mnt/afs_toolcall/sunhao4/workspace/LightLLM"
 SMOKE=0
 DRY_RUN=0
-OVERRIDES=()   # 透传给 cl_main 的 hydra override(如 trainer.total_training_steps=1)
+OVERRIDES=()   # 透传给 agent_rl_main 的 hydra override(如 trainer.total_training_steps=1)
 
 # ── 解析参数 ────────────────────────────────────────────────────────────
 while [ $# -gt 0 ]; do
@@ -42,7 +42,7 @@ while [ $# -gt 0 ]; do
     --lightllm-dir)  LIGHTLLM_DIR="$2"; shift 2;;
     --smoke)         SMOKE=1; shift;;
     --dry-run)       DRY_RUN=1; shift;;
-    *) OVERRIDES+=("$1"); shift;;   # 未知裸参数(如 trainer.total_training_steps=1)当 hydra override,透传给 cl_main
+    *) OVERRIDES+=("$1"); shift;;   # 未知裸参数(如 trainer.total_training_steps=1)当 hydra override,透传给 agent_rl_main
   esac
 done
 
@@ -53,7 +53,7 @@ OVERRIDES=("trainer.save_freq=25" "${OVERRIDES[@]}")
 
 [ -z "$ROLLOUT_TP" ] && ROLLOUT_TP="$GPUS_PER_NODE"
 [ -z "$CUDA_DEVICES" ] && CUDA_DEVICES="$(seq -s, 0 $((GPUS_PER_NODE-1)))"
-PY="$VENV/bin/python"
+PY="$VENV/bin/python3"
 TOTAL_GPUS=$((NNODES * GPUS_PER_NODE))
 DP=$((TOTAL_GPUS / ULYSSES_SP))
 
@@ -135,7 +135,7 @@ export VLLM_GDN_PREFILL_BACKEND="${VLLM_GDN_PREFILL_BACKEND:-triton}"
 # lightllm 开 enable_torch_memory_saver(cuMem VMM 劫持 cudaMalloc) × NCCL 默认
 # NCCL_CUMEM_ENABLE=1 冲突 → 部分副本 uvicorn 起不来 → verl 无超时 gather 死等 →
 # 16卡 rollout 从没开始就 hang(b1_16gpu 6 次复发;§45)。verl 已给 vllm/sglang 设 =0
-# (sgl #6723),lightllm 漏了。关 CUMEM 不关 P2P,TP 带宽保留、保持 2 机。verl_runner.py
+# (sgl #6723),lightllm 漏了。关 CUMEM 不关 P2P,TP 带宽保留、保持 2 机。agent_rl_runner.py
 # 也会透传进 Ray worker(worker 不继承本 shell env),这里 export 是双保险 + 单机路径。
 export NCCL_CUMEM_ENABLE="${CL_NCCL_CUMEM:-0}"
 # ══════════════════════════════════════════════════════════════════════════════
@@ -148,7 +148,7 @@ export NCCL_CUMEM_ENABLE="${CL_NCCL_CUMEM:-0}"
 # (1) 加载 recipe_custom 注册:lightllm replica / custom_language_model engine / Qwen3.5 GDN
 #     monkey_patch(变长packed forward)/ omni reward / agent_loop。这是 Qwen3.5-9B 混合 GDN
 #     能用 remove_padding+flash_attn3+长序列(65536) 的前提。
-# ★ 多模态策略:TEXT_MODEL_ONLY 控制视觉加载和更新(需经 verl_runner passthrough 透传到 LightLLM):
+# ★ 多模态策略:TEXT_MODEL_ONLY 控制视觉加载和更新(需经 agent_rl_runner passthrough 透传到 LightLLM):
 #   0=全多模态(视觉开+不冻结) 1=冻结视觉(视觉开+冻结参数,默认,同事方案) 2=纯文本(视觉关+标准RoPE)
 export TEXT_MODEL_ONLY="${TEXT_MODEL_ONLY:-1}"
 export VERL_USE_EXTERNAL_MODULES="${VERL_USE_EXTERNAL_MODULES:-recipe_custom.bootstrap}"
@@ -325,24 +325,6 @@ _archive_metrics() {
   return 0
 }
 
-# 删掉 buffer_dumps 里 step > 模型 ckpt step 的快照(模型没到的 step,其 buffer 快照是脏的)。
-# 无 ckpt(N=-1)时删该实验全部 buffer_dumps(从头训,旧 buffer 快照作废)。
-_trim_buffer_dumps() {
-  local keep_max="$1"   # 保留 step <= keep_max 的; -1 = 全删
-  local pat="$ROOT_DIR/buffer_dumps/${_exp}-step-"
-  local removed=0
-  for snap in "${pat}"*.sqlite; do
-    [ -e "$snap" ] || continue
-    local s; s=$(basename "$snap" | grep -oP '(?<=-step-)\d+') || s=""
-    [ -n "$s" ] || continue   # 解析不出 step 号 → 跳过(不误删)
-    if [ "$keep_max" -lt 0 ] || [ "$s" -gt "$keep_max" ]; then
-      rm -f "$snap" && removed=$((removed+1))
-    fi
-  done
-  [ "$removed" -gt 0 ] && echo "[train_cl] buffer_dumps 清理: 删 $removed 个 step>${keep_max} 快照"
-  return 0
-}
-
 _run_single() {
   local ckpt="$ROOT_DIR/ckpts/$_exp"
   local _mdir="$ROOT_DIR/logs/metrics/$_exp"
@@ -360,8 +342,8 @@ _run_single() {
   # auto-resume:模型 checkpoint 是唯一真相源。
   #   · 有 ckpt(step=N): resume。verl --resume-from 会 load actor 权重 + data.pt(dataloader 游标,
   #     两者同在 global_step_N/ 目录 → 模型与数据天然对齐到 N),从 N+1 续采、不重复。
-  #     项目侧产物对齐到 N: metrics 归档后重写(新 run 从 N+1 写)、buffer_dumps 删 step>N 的脏快照。
-  #   · 无 ckpt: 从头训。删该实验的数据检查点残留(buffer_dumps 全删),metrics 归档后重开。
+  #     项目侧产物对齐到 N: metrics 归档后重写(新 run 从 N+1 写)。
+  #   · 无 ckpt: 从头训。metrics 归档后重开。
   local latest latest_step
   latest=$(ls -dt "$ckpt"/global_step_* 2>/dev/null | head -1) || true
 
@@ -374,12 +356,10 @@ _run_single() {
     latest_step=$(basename "$latest" | grep -oP '\d+')
     echo "[train_cl] 检测到 checkpoint step=$latest_step → 自动续训(模型+数据游标随 data.pt 对齐到 $latest_step,不重复)"
     _archive_metrics "$_mdir"
-    _trim_buffer_dumps "$latest_step"        # 删 step>N 的脏 buffer 快照(模型没到那些 step)
     _resume_arg=("--resume-from" "$latest")
   else
-    echo "[train_cl] 无 checkpoint → 全新训练(删数据检查点残留,metrics 归档后从头)"
+    echo "[train_cl] 无 checkpoint → 全新训练(metrics 归档后从头)"
     _archive_metrics "$_mdir"
-    _trim_buffer_dumps -1                     # 无 ckpt: 删该实验全部 buffer_dumps
     rm -f "$_mdir/metrics.jsonl"              # 归档已挪走,清残留让 verl 重写
   fi
 
@@ -401,12 +381,12 @@ _run_single() {
       ;;
     2) ;; # 保持 config 基线(enable_multimodal=false)
   esac
-  # ⚠️ 参数传递用 `--` 分隔符根治 argparse 顺序坑：cl_main 的 overrides 是 nargs="*" positional,
+  # ⚠️ 参数传递用 `--` 分隔符根治 argparse 顺序坑：agent_rl_main 的 overrides 是 nargs="*" positional,
   #   与 optional(--resume-from)混排时,argparse(py3.11 训练环境)会把 -- 之后本该是 positional 的
   #   key=value 误判 "unrecognized arguments"(实测两次崩:先 trainer.*、后 actor_rollout_ref.*)。
   #   `--` 显式终止 optional 解析,其后【全部】当 positional overrides,与 Python 版本/顺序无关。
   #   所有 optional(--config/--resume-from)在 -- 之前,所有 override(_model_ovr + $@)在 -- 之后。
-  "$PY" -m trainer.cl_main --config "$CONFIG" ${_resume_arg[@]+"${_resume_arg[@]}"} -- \
+  "$PY" -m trainer.agent_rl_main --config "$CONFIG" ${_resume_arg[@]+"${_resume_arg[@]}"} -- \
     "${_model_ovr[@]}" ${@+"$@"}
 }
 
@@ -493,7 +473,7 @@ echo "[train_cl] rank=${RANK:-0}: 同步完成"
 # 3. 分发：master 训，worker 连 Ray
 if [ "${RANK:-0}" = "0" ]; then
   echo "[train_cl] master: 启动训练"
-  # 捕获训练退出码。绝不无条件打「训练结束」——否则 cl_main 崩溃(如 rollout
+  # 捕获训练退出码。绝不无条件打「训练结束」——否则 agent_rl_main 崩溃(如 rollout
   # IndexError)退出后脚本照样打「成功」+ret 0,平台误判为成功、0 checkpoint 却
   # 显示完成(2026-07-27 10:05 的假成功)。ray stop 始终执行清理,但脚本 exit code
   # 必须等于训练 exit code,让平台看到真实成败。

@@ -1,17 +1,22 @@
 """Tests.
 
-Layout:
-    test_buckets.py     -- 9-bucket allocation, quota math, eviction rules
-    test_priority.py    -- 4-signal priority fusion, anti-reward-monotonicity check
-    test_sampler.py     -- two-level sampling distribution, starvation_boost
-    test_weighting.py   -- W2 token weight: U-shaped ((gamma^block + delta^(K_i-block))/2),
-                           clip+normalize. Action-block segmenter test is
-                           pending real data -- equal-length K=20 fallback
-                           is testable now.
-    test_cl_loss.py     -- cl_loss composition (RL + KL + replay + entropy)
-    test_trajectory_adapter.py -- verl batch -> buffer metadata
-    test_verl_smoke.py  -- minimal smoke test that custom loss survives a verl
-                           train step on toy data (validates the FSDP / grad
-                           accumulation risk flagged in doc/VerlIntegration.md
-                           section 4)
+CPU-runnable unit tests for the self-evolving multi-agent RL system. GPU/verl
+full-stack smoke is marked ``@pytest.mark.gpu`` and skips without a cluster.
+
+Layout (surviving suites):
+    test_configs.py             -- run/*.yaml load + verl Hydra schema (agent_rl)
+    test_collect.py             -- native-field collection -> scheduler -> ingest
+    test_agent_rollout_manager.py -- AgentSchedulerAgentLoopManager wiring
+    test_agents.py              -- observer / questioner / reward(judge) agents
+    test_model_reward.py        -- external LLM-judge compute_score path
+    test_sandbox_client.py      -- SandboxClient contract + backend registry
+    test_session_pool.py        -- session sandbox pool / winner-sync slots
+    test_simulated_session.py   -- simulated multi-turn session driver
+    test_live_messages.py       -- live message streaming boundary
+    test_verifier*.py           -- verifier + verifier hook
+    test_image_trajectory_drop.py / test_force_screenshot_and_drop.py
+                                -- image trajectory filtering (E13)
+    test_policy_loss_padding_patch.py -- verl policy-loss padding patch (torch-gated)
+    test_verl_smoke.py          -- minimal verl integration smoke (gpu/verl-gated)
+    ... plus dataset / dockerfile / env / qc helpers.
 """

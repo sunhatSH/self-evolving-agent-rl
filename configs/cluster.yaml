@@ -28,7 +28,7 @@ actor_rollout_ref:
     override_config:
       attn_implementation: flash_attention_3
   ref:
-    path: /tmp/qwen36            # pi_ref = pi_0（初始模型）；CL 后续阶段可改为上一阶段 ckpt
+    path: /tmp/qwen36            # pi_ref = pi_0（初始模型）
     fsdp_config:
       param_offload: false        # 不卸载到 CPU
     log_prob_micro_batch_size_per_gpu: 1
@@ -65,8 +65,9 @@ actor_rollout_ref:
     log_prob_max_token_len_per_gpu: 32768
     response_length: 12288
     # agentic 多轮：verl 原生 v1 agent_loop（RemoteAgentLoopManager + 沙箱 harness），
-    # 与 9B 新路线一致（见 b1_9b_16gpu.yaml / debug §30-31）。取代旧自写 winner-sync
-    # cl_rollout_manager.AgentLoopManager（与 use_v1 custom_sync + transfer_queue 不自洽）。
+    # 沿用 verl 原生 v1 agent_loop 路线（自写 winner-sync 的
+    # trainer.agent_rollout_manager.AgentLoopManager 走非集群/debug 路径，与 use_v1
+    # custom_sync + transfer_queue 不自洽，集群走 RemoteAgentLoopManager）。
     agent:
       agent_loop_manager_class: recipe_custom.agent.agent_loop_manager.RemoteAgentLoopManager
       agent_loop_config_path: configs/exps/agent_loop_config.yaml
@@ -138,8 +139,8 @@ trainer:
   v1:
     trainer_mode: custom_sync
     sampler:
-      # 9桶 buffer 接入点：R 系列设 custom_sampler.{path,name} 指向 CLReplayBuffer。
-      # B1/K* buffer.enabled=false 用 verl 内建 ReplayBuffer(null)即可。
+      # 默认用 verl 内建 ReplayBuffer（path/name=null）。如需自定义采样器，
+      # 设 custom_sampler.{path,name} 指向实现。
       custom_sampler:
         path: null
         name: null

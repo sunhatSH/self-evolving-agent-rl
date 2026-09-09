@@ -1,118 +1,95 @@
-# OVERVIEW — 代码地图
+# OVERVIEW — 架构与设计深入
 
-> 一页纸速览：目录职责、数据流、"改 X 看哪个文件"、实验状态、已知问题。
-> 协作规范见 `CLAUDE.md`；设计信源见 `doc/source/CL_Design.md`；文档索引见 `doc/README.md`。
-> 项目：Continual Learning over Agentic LLM（Qwen3.5-9B，verl 0.8.0，LightLLM，16 卡）。
-
----
-
-## 目录职责（源码）
-
-| 目录 | 职责 |
-|------|------|
-| `trainer/` | 训练入口 + verl 无侵入注入。`cl_main.py`(入口) `verl_runner.py`(CLTaskRunner) `cl_loss.py`(CL Loss) `cl_replay_hook_v1.py`(9桶回放 hook + std 指标) `trajectory_adapter_v1.py`(KVBatchMeta→轨迹) `replay_forward.py`(回放行构建) `model_reward*.py`(judge 打分) |
-| `replay_buffer/` | 9 桶 Buffer（纯 Python，与 verl 解耦）。`bucket.py` `store.py` `sampler.py` `eviction.py` `priority.py` `weighting.py` |
-| `rollout/` `agents/` `inference/` | 采样侧：沙箱客户端 / 三 Agent（observer/questioner/reward）/ 单步生成 |
-| `eval/` | ClawEval 评测 |
-| `configs/` | 实验配置（三层继承 base→cluster→run/）。见下方 |
-| `scripts/` | 训练/数据/画图/沙箱脚本。见下方 |
-| `tests/` | ~400 单测（CPU；verl/CUDA smoke 需集群） |
-| `docker/sandbox/` | 沙箱镜像 + fs-seeds 种子文件系统 |
-| `data_pipeline/` `bin/` | 数据管道工具（独立风格，ruff 排除） |
-
-## 目录职责（产物 / 文档，多为 gitignored）
-
-| 目录 | 职责 |
-|------|------|
-| `datasets/` | `train.parquet`/`train_aligned.parquet`（训练用，5桶×3200 中等难度）+ `cold_start/`（warmup）+ `_archive/`（旧数据） |
-| `logs/metrics/<exp>/` | verl FileLogger 每 step metrics.jsonl（+ metrics.all.jsonl 跨 run 累积） |
-| `logs/experiments/figs/` | 画图产物（每实验一文件夹 + config.json，旧图折叠 `{exp}_N/`） |
-| `rollouts/training/<exp>/` | 每 step winner + rollout 全量轨迹（每次启动清理） |
-| `ckpts/` `buffer_dumps/` | checkpoint / buffer 快照 |
-| `doc/` | 设计信源(source/) 运行手册(ops/) 评测(eval/) 调试(debug/) 实验结论(expr/) 归档(archive/) |
-| `paper/` `master-thesis/` | 论文 / 学位论文 |
+> 系统 = **多 Agent 采样 + 沙箱环境 + diff 驱动奖励 + 标准 GRPO 训练**。
+> 训练只用来验证系统端到端跑通，不含任何持续学习机制。协作规范见 `CLAUDE.md`，入口见 `README.md`。
 
 ---
 
-## 数据流
+## 1. 采样环（sampling loop）
+
+一次 rollout 里的角色分工：
+
+- **Actor（ReAct）** — 在代码沙箱中一步步执行工具动作解任务。它就是被训练的策略（verl 原生 rollout LLM server，逐步 `llm_client.generate` 返回 token_ids + log_probs）。
+- **Observer** — 任务开始时拍一次沙箱快照（baseline），结束时再拍一次，产出 **before/after 确定性 diff**。这是奖励的 ground truth，**不是**让模型复读 actor 的自述。
+- **Questioner** — 人设驱动的模拟用户，读 Observer 的客观报告 + 人设 + 历史，写下一轮 query，或结束会话（多轮路径，单轮时为 no-op）。
+
+数据流（单次 `generate_sequences`）：
 
 ```
-configs/run/*.yaml
-   │  (OmegaConf 继承 base→cluster→run；命令行 --lr 等最高优先级)
-   ▼
-trainer/cl_main.py  ──build_buffer()──► replay_buffer/BucketReplayBuffer (R 系列; B/K 为 None)
-   │
-   ▼
-trainer/verl_runner.py (CLTaskRunnerV1)
-   │  set_loss_fn(cl_loss)  +  install_buffer_hooks_v1(std 指标 + 9桶回放)
-   ▼
-verl 原生 main_ppo (custom_sync) ──rollout──► RemoteAgentLoopManager
-   │                                              │
-   │  _update_actor(KVBatchMeta, metrics)          ▼
-   │    PRE: 采 buffer winner 掺回放行             rollout/ + agents/ + docker/sandbox
-   │    POST: 抽 winner 入 buffer + std 指标 + rollout 记录
-   ▼
-logs/metrics/<exp>/metrics.jsonl ──► scripts/plot/plot_progress.py ──► logs/experiments/figs/
+verl fit() ──prompts(已×n)──► agent_rollout_manager.generate_sequences
+   每个输入 ROW → 1 次单槽 rollout（verl 拥有 ×n 复制与 GRPO 分组，我们每行只回 1 条轨迹）
+      每 step → llm_client.generate（token_ids + log_probs）
+      Observer 对该行做 diff → meta['observer_report']
+      _score_all_slots：observer diff + verifier + judge → t.reward
+   list[Trajectory] ──trajectories_to_dataproto──► DataProto（含 rm_scores + observer_report）
 ```
 
----
+**行数契约（关键）**：verl 在调用我们之前已按 `rollout.n` 把每条 query 复制 n 份（interleave），并按它自己的 `uid` 分组算 advantage。所以我们**每个输入行只回恰好 1 条轨迹、按序、绝不自造 uid**（否则 `DataProto.union` 会碰撞）。
 
-## 改 X 功能看哪个文件
+## 2. 三 Agent 的契约
+
+| Agent | 输入 | 产出 | 消费方 |
+|-------|------|------|--------|
+| Observer | actor 轨迹 + 沙箱 baseline/after | `ObservationReport`（`agents/schema.py`） | Questioner（写下轮 query）+ Reward judge（判完成度） |
+| Questioner | `ObservationReport` + persona + 历史 | 下一轮 user query 或 `<end_session>` | 下一轮 rollout |
+| Reward | `ObservationReport` + 任务 | 标量 reward | 写入 `rm_scores` |
+
+**`ObservationReport` 两个通道**（`agents/schema.py`）：
+- `state_diff` / `intermediate` / `final` — Observer 模型归纳出的**状态证据**（来自确定性 diff），judge 用它判"真实效果 = 完成度"。
+- `actor_trajectory` — actor 动作文本，**pass-through**：由 observer 组件携带给 reward judge 判过程/安全，但**从不进 observer 模型的 prompt**（省 token）。
+
+## 3. diff 驱动的抗 reward-hacking 设计
+
+Observer 的证据是**代码算出来的**，不是模型读 actor 声称的。两条证据通道（`agents/observer.py`）：
+
+- **FS diff** — 本轮创建/修改/删除的文件，**带内容**；xlsx/docx/pptx/pdf 等富格式会在沙箱内提取成文本，所以"slide 3 写了 X"/"单元格 B2 = 12345"可核对，不是不透明字节。
+- **SYS diff** — 非文件系统效果：本轮装的包、开的端口、起的进程（SysOps 类任务）。
+
+actor 的自述只作为 **claims** 交叉核对（填 `discrepancies`）。为什么 diff-driven 而非 claim-driven：actor 叙事会幻觉出不存在的文件/值，只有环境 diff 是 ground truth；claims 只报结果、漏中间产物。
+
+**奖励的多层拦截**（`agents/reward.py`）：本轮若无任何效果（空 diff、`has_effect=False`）→ **短路返回 0 分、不调用 judge**（改了个寂寞的轮次白得完成度 0，同时省掉昂贵的 judge 往返）。
+
+**verifier**（`agents/verifier.py`）：对 data-analysis 类任务（读 CSV/XLSX → 出报告），纯文本 judge 看不到工具返回值会瞎扣分。verifier 是同一个 correctness judge，但在打分时**手握工具去查活着的沙箱**（`_score_all_slots` 里沙箱尚未销毁），单 LLM 工具循环核实数字。
+
+## 4. rollout 如何注入 verl（不 fork）
+
+verl 0.8.0 有官方注入点（`ray_trainer.py`）：把
+`actor_rollout_ref.rollout.agent.agent_loop_manager_class` 设成一个 FQN，verl 用它替换默认 `AgentLoopManager`，**不碰 `fit()`**。
+
+- 我们的类：`trainer/agent_rollout_manager.py`（`AgentSchedulerAgentLoopManager`，导出别名 `AgentLoopManager`），只 override `generate_sequences`。
+- verl 懒加载（在 `create`/装配时才 import verl），所以模块能在无 verl 的机器上 import；`trajectories_to_dataproto` 和 prompt 抽取是纯函数，用 fake 单测。
+- 自定义 rollout 的运行参数（如 `sessions_per_step`）在顶层 `agent_rl:` 段，只被 `agent_rollout_manager.py` 读，verl 忽略。
+
+## 5. reward 如何流动
+
+**当前是 rollout 内联算好**：`generate_sequences` → `_score_all_slots(observer diff + verifier + judge)` → `t.reward` → `trajectories_to_dataproto` 写 `rm_scores`。verl 直接读 `rm_scores`（`use_rm=False`），因此**从不调用 reward manager**——`base.yaml` 里 `reward_manager` 是 `naive`（既然 `rm_scores` 已存在就永不触发）。
+
+> `src/trainer/observer_reward_manager.py` 是**未接线的备选方案**（把 reward 走 verl RewardLoopWorker + ObserverRewardManager 的路径），保留作参考，当前不运行。若要启用需同时让 `generate_sequences` 停写 `rm_scores`，否则双重奖励。
+
+judge 本体：`trainer/model_reward.py::JudgeClient`（OpenAI 兼容的冻结 judge），模型由 env 解析（`JUDGE_API_BASE`/`REWARD_API_BASE` + `MODEL`），不写死；截断防护抛 `TruncatedOutputError` 由各消费方分流。
+
+## 6. 关键文件速查
 
 | 要改 | 文件 |
 |------|------|
-| CL Loss（L_rl/L_kl/L_replay/L_ent 组合） | `trainer/cl_loss.py` |
-| 回放采样量 / 比例（replay_ratio） | `trainer/cl_replay_hook_v1.py`（PRE 段） |
-| 回放行构建（token ids → 训练行） | `trainer/replay_forward.py` + `trainer/replay_batch.py` |
-| v1 轨迹/字段提取（bucket/task_id/reward） | `trainer/trajectory_adapter_v1.py` |
-| std 指标（reward_std/group_reward_std） | `trainer/cl_replay_hook_v1.py::_merge_std_metrics` |
-| 9 桶采样 / 淘汰 / 优先级 / 权重 | `replay_buffer/{sampler,eviction,priority,weighting}.py` |
-| reward judge（打分维度/模型） | `trainer/model_reward.py` + `agents/prompts.py` REWARD_RUBRIC |
-| 桶坐标 / 训练序 | `configs/bucket_coords.json`(sampler 默认) `bucket_coords_final.json`(建数据) |
-| 难度打分 / 建训练集 | `scripts/pipeline/score_difficulty.py` + `scripts/pipeline/build_train.py` |
-| 画训练曲线 | `scripts/plot/plot_progress.py` |
-| 训练启动 / 拓扑 / lr 传参 | `scripts/train.sh`（--lr 等）+ `scripts/_train_impl.sh` |
+| 训练入口 / CLI override | `src/trainer/agent_rl_main.py` |
+| verl runner（构建 RayPPOTrainer、std 指标） | `src/trainer/agent_rl_runner.py` |
+| 自定义 rollout（行数契约、DataProto 装配） | `src/trainer/agent_rollout_manager.py` |
+| Observer diff / 快照探针 | `agents/observer.py` |
+| Questioner 人设 / 多轮 / patience | `agents/questioner.py` |
+| reward 打分 / 短路门控 | `agents/reward.py` + `src/trainer/model_reward.py` |
+| verifier 工具循环 | `agents/verifier.py` |
+| 共享数据结构（ObservationReport / Persona） | `agents/schema.py` |
+| 会话调度 / 沙箱客户端 / 采集 | `src/rollout/` |
+| 单步生成边界 | `src/inference/generate.py` |
+| verl 稳定性 patch（dataproto/entropy/padding/empty_batch/pause/sp_gather 等） | `src/trainer/*_patch.py` |
 
----
+## 7. 配置
 
-## configs/ 结构
+- **继承**：`configs/run/agent_rl_4gpu.yaml` 用 `defaults: [../base]` 合并 `configs/base.yaml`（OmegaConf，解析在 `agent_rl_main.py`）。命令行 `key=value` / `--lr` 最高优先级。
+- **4 卡 debug config**：小模型（Qwen3.5-9B via env `MODEL_PATH`）、local 沙箱、`total_training_steps=4`、16 query/step、console-only logger、`save_freq` 大于总步数故不产 checkpoint。
+- 自定义 rollout 段在顶层 `agent_rl:`；verl 全量默认在 `configs/_generated_ppo_trainer.yaml`。
 
-| 项 | 说明 |
-|------|------|
-| `base.yaml` `cluster.yaml` `_generated_ppo_trainer.yaml` | 三层继承基底（lr/batch/n 等默认已对齐 B1 实验值：lr=2e-6、batch=32、n=8） |
-| `run/*.yaml`（21 个，全 16 卡） | 集群可跑：B1(baseline) / K1-K3,K2-R(KL 消融) / R0-R9(buffer 消融) / b1,r4(旧版)。4gpu/8gpu 变体已删（train.sh 只留 16/32/64 卡预设） |
-| `bucket_coords.json` `bucket_coords_final.json` | 前者 sampler 默认，后者建数据用（**其余变体已归 `_bucket_coords_variants/`**） |
-| `_legacy_phases/` | 旧 phaseN 配置（已被 run/ 取代，仅回溯） |
-| `templates/` | 实验/硬件模板 |
+## 8. 测试
 
-## scripts/ 结构
-
-| 子目录 | 内容 |
-|------|------|
-| 顶层 | `train.sh` `_train_impl.sh`（训练入口）+ `warmup_buffer.py` `add_reward_fn.py`（pipeline 入口，被 .sh 按名调用） |
-| `pipeline/` | 冷启动 / 数据管道 / 难度打分 / 建训练集 |
-| `collect/` | 沙箱采集 |
-| `data/` `analysis/` | 数据 prep / QC / 桶发现 |
-| `plot/` | 画图（plot_progress 主力 + metrics 家族） |
-| `serve/` | reward serve / agents harness / 评测 |
-| `env/` `sandbox/` | 训练/沙箱凭证 + 镜像 build |
-| `_legacy/` | 归档的旧 pipeline/analysis 脚本（历史版本，不再维护） |
-
----
-
-## 实验状态（2026-08-13）
-
-| 实验 | 类型 | 状态 |
-|------|------|------|
-| B1 | 纯 PPO baseline | 跑中，coding 桶，reward~0.4，std 指标已落盘 |
-| K2 | PPO + KL(0.05) | 跑中，entropy 高于 B1（KL 生效） |
-| R0 | CLEAR 单桶 replay | 跑中，buffer 每步 +32、group_std 已出；**回放刚修好待验证**（step2 起应 replay_empty=0） |
-| 路线图 | K1-K5 / R3-R9 / C1-C4 / S1-S2 | 见 `doc/source/CL_Design.md` 实验路线 |
-
-结论存 `doc/expr/<exp>/<日期>.md`（图引 `../assets/`）。
-
-## 已知问题 / 待办
-
-- **v1 字段映射**（RunLog §63）：v1 的 bucket/task_id/messages 在 tq 的 field/extra_info，不在 tag。已修 `trajectory_adapter_v1.py`（extra_info 取 bucket/task_id）+ `replay_forward.py`（v1 用 pre-tokenized ids 建回放行，不重 tokenize messages）。**需重启验证 R0 回放非空**。
-- **rollout 成功率记录**：`_persist_rollout_status` 目前只在 buffer 启用（R 系列）时触发；B1/K2（无 buffer）不记录——如需全实验记录待独立。
-- **回放比例消融**：replay_ratio 当前默认 5（回放占比 16.7%）；CLEAR 原文 50%、设计文档 33%——三档消融待跑。
+CPU 单测 `pytest`：**217 passed, 19 skipped**（skip = torch/verl/GPU-gated）。单测用 AFS miniconda3 python 即可，无需 GPU。全栈（真实 verl DataProto + LLM server + 沙箱）只能在多卡机上验证。

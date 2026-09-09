@@ -4,7 +4,7 @@
 #
 # 为什么单独一份：这些 patch 必须在【每个】verl 进程 import verl 时消费——尤其
 # AgentSessionWorker（真正跑 AsyncSandbox.create / create_hooks 的进程）。verl/__init__
-# 靠 VERL_USE_EXTERNAL_MODULES（逗号分隔）决定 import 哪些外部模块；经 verl_runner.py 的
+# 靠 VERL_USE_EXTERNAL_MODULES（逗号分隔）决定 import 哪些外部模块；经 agent_rl_runner.py 的
 # runtime_env passthrough 传进所有 Ray worker。
 #
 # 历史坑（2026-08-26，本文件诞生原因）：评测脚本从不设 VERL_USE_EXTERNAL_MODULES →

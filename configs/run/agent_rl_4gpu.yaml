@@ -1,0 +1,117 @@
+# =============================================================================
+# 4-GPU debug smoke config — validates the rollout+GRPO train loop, not for results.
+# =============================================================================
+#
+# Purpose: smoke-validate the full rollout + train loop end-to-end on 4×H800
+# (68G each). This is a plumbing check (does rollout -> reward -> GRPO update
+# run without crashing over a few steps?), NOT a run that produces meaningful
+# metrics or checkpoints.
+#
+# Inherits base.yaml via `defaults` (resolved in src/trainer/agent_rl_main.py
+# load_config -> OmegaConf.merge). Only the fields that must shrink for a 4-GPU
+# debug box are overridden here; everything else comes from base.yaml.
+#
+# Launch (the launch script exports MODEL_PATH / TRAIN_FILES / VAL_FILES):
+#   bash scripts/train_4gpu.sh configs/run/agent_rl_4gpu.yaml
+#   (long runs in tmux: tmux new -d -s smoke 'bash scripts/train_4gpu.sh')
+#
+# Model: uses a SMALL model on this box (Qwen3.5-9B), NOT the 27B base in
+# base.yaml. Override MODEL_PATH env to point elsewhere.
+
+defaults:
+  - ../base
+
+actor_rollout_ref:
+  model:
+    # Small model for debug (NOT 27B). Launch script exports MODEL_PATH.
+    path: ${oc.env:MODEL_PATH,/mnt/afs_toolcall/sunhao4/models/Qwen3.5-9B}
+
+  rollout:
+    name: lightllm
+    mode: async
+    n: 4                              # traj/query (GRPO group). Modest for a 4-GPU debug box.
+    tensor_model_parallel_size: 2     # 4 GPUs: 2×TP2 rollout replicas
+    gpu_memory_utilization: 0.6       # conservative on 68G cards
+    max_model_len: 32768
+    max_num_batched_tokens: 6144
+    enable_chunked_prefill: false
+    calculate_log_probs: true
+    log_prob_micro_batch_size_per_gpu: 1
+    response_length: 12288
+    # Route rollout through our custom multi-agent session manager, local sandbox
+    # (no cluster sandbox creds in debug).
+    agent:
+      agent_loop_manager_class: trainer.agent_rollout_manager.AgentLoopManager
+      sandbox_backend: local
+      sessions_per_step: 16           # fallback; primary source is agent_rl.rollout below
+    multi_turn:
+      format: qwen3_coder
+      reasoning_format: qwen3
+      max_assistant_turns: 6
+      max_tool_response_length: 16384
+    engine_kwargs:
+      lightllm:
+        batch_max_tokens: 6144
+        enable_multimodal: false
+        enable_torch_memory_saver: true
+        graph_max_batch_size: 32
+        running_max_req_size: 32       # must be >= sessions_per_step (16)
+        sampling_backend: triton
+        disable_vision: true
+        disable_audio: true
+
+  actor:
+    strategy: fsdp
+    ulysses_sequence_parallel_size: 1   # 4-GPU debug: no sequence parallel
+    ppo_mini_batch_size: 16             # = train_batch_size (single update/step)
+    ppo_micro_batch_size_per_gpu: 1
+    ppo_max_token_len_per_gpu: 32768
+    use_dynamic_bsz: true
+    optim:
+      lr: 2.0e-6
+    fsdp_config:
+      param_offload: true
+      optimizer_offload: true
+
+  ref:
+    log_prob_micro_batch_size_per_gpu: 1
+    fsdp_config:
+      param_offload: true
+
+# Custom rollout manager reads sessions_per_step from here (see base.yaml header).
+agent_rl:
+  rollout:
+    sessions_per_step: 16             # 16 = a quarter of the 64-query cluster batch
+
+# 16 queries/step (a quarter of the 64-query cluster batch).
+data:
+  train_files: ${oc.env:TRAIN_FILES,/mnt/afs_toolcall/sunhao4/workspace/agentic_cl_research/datasets/train_cl.parquet}
+  val_files: ${oc.env:VAL_FILES,/mnt/afs_toolcall/sunhao4/workspace/agentic_cl_research/datasets/val.parquet}
+  train_batch_size: 16
+  gen_batch_size: 16
+  max_prompt_length: 4096
+  max_response_length: 12288
+  return_raw_chat: true
+  filter_overlong_prompts: true
+  trust_remote_code: true
+  dataloader_num_workers: 0
+
+algorithm:
+  adv_estimator: grpo
+
+trainer:
+  nnodes: 1
+  n_gpus_per_node: 4
+  total_epochs: 1
+  total_training_steps: 4           # smoke: 4 steps, no real convergence
+  save_freq: 100                    # > total_training_steps so no checkpoint ever triggers
+  test_freq: -1                     # no in-loop validation
+  val_before_train: false
+  critic_warmup: 0
+  logger: [console]                 # console only (no swanlab for debug)
+  experiment_name: agent_rl_4gpu_debug
+  project_name: self-evolving-agent-rl
+
+ray_kwargs:
+  ray_init:
+    num_cpus: null

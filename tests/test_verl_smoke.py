@@ -9,7 +9,17 @@ import importlib.util
 
 import pytest
 
-HAS_VERL = importlib.util.find_spec("verl") is not None
+
+def _has_spec(name: str) -> bool:
+    # find_spec raises ValueError if a partial/namespace-less stub (e.g. a bare
+    # ``verl`` module with ``__spec__ is None``) is on sys.path. Treat that as absent.
+    try:
+        return importlib.util.find_spec(name) is not None
+    except (ValueError, ModuleNotFoundError, ImportError):
+        return False
+
+
+HAS_VERL = _has_spec("verl")
 
 
 @pytest.mark.skipif(not HAS_VERL, reason="verl not installed")
@@ -34,7 +44,7 @@ def test_actor_rollout_worker_has_set_loss_fn():
     assert hasattr(ActorRolloutRefWorker, "set_loss_fn")
 
 
-HAS_TORCH = importlib.util.find_spec("torch") is not None
+HAS_TORCH = _has_spec("torch")
 HAS_CUDA = False
 if HAS_TORCH:
     import torch

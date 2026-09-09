@@ -130,65 +130,9 @@ def test_extract_record_ids_absent_returns_empty():
     assert extract_record_ids_from_prompts(P()) == []
 
 
-def test_persist_prefers_live_over_token_decode():
-    """_persist_rollout_status: empty round-tripped messages -> use the live
-    side-channel (with [Sandbox Output]) instead of the token-decode fallback."""
-    import json as _json
+# NOTE: tests for ``_persist_rollout_status`` were removed — that helper lived in
+# the deleted ``trainer.cl_replay_hook_v1`` (CL replay hook) and has no surviving
+# equivalent in this project.
 
-    from trainer.cl_replay_hook_v1 import _persist_rollout_status
-
-    exp = "exp_persist"
-    # live side-channel has the full transcript incl. sandbox output
-    lm.write_batch(exp, ["Tk"], [_traj("value\n10\n12\n20")])
-
-    # groups mimic _extract_rollout_groups output: (trajectory, bucket, meta).
-    # trajectory is [] (round-trip lost it) and meta has token ids for the fallback.
-    meta = {
-        "task_id": "Tk",
-        "status": "success",
-        "reward": 0.5,
-        "prompt_token_ids": [1, 2, 3],
-        "response_token_ids": [4, 5, 6],
-    }
-    groups = {"Tk": [([], "coding", meta)]}
-
-    class _Tok:
-        def decode(self, ids, skip_special_tokens=False):
-            return "DECODED_FALLBACK_SHOULD_NOT_WIN"
-
-    _persist_rollout_status(groups, exp, step=7, tokenizer=_Tok())
-
-    out = lm.pending_path(exp).parent / "rollout_status-7.jsonl"
-    row = _json.loads(out.read_text(encoding="utf-8").strip())
-    msgs = row["rollouts"][0]["messages"]
-    # live transcript won: sandbox output present, decode fallback absent
-    assert any("[Sandbox Output]" in str(m.get("content", "")) for m in msgs)
-    assert not any("DECODED_FALLBACK" in str(m.get("content", "")) for m in msgs)
-
-
-def test_persist_falls_back_to_decode_when_no_live():
-    """No live side-channel -> token-decode fallback still works (unchanged path)."""
-    import json as _json
-
-    from trainer.cl_replay_hook_v1 import _persist_rollout_status
-
-    exp = "exp_persist_fb"
-    meta = {
-        "task_id": "Tk",
-        "status": "success",
-        "reward": 0.5,
-        "response_token_ids": [4, 5, 6],
-    }
-    groups = {"Tk": [([], "coding", meta)]}
-
-    class _Tok:
-        def decode(self, ids, skip_special_tokens=False):
-            return "DECODED_FALLBACK"
-
-    _persist_rollout_status(groups, exp, step=1, tokenizer=_Tok())
-    out = lm.pending_path(exp).parent / "rollout_status-1.jsonl"
-    row = _json.loads(out.read_text(encoding="utf-8").strip())
-    msgs = row["rollouts"][0]["messages"]
-    assert any("DECODED_FALLBACK" in str(m.get("content", "")) for m in msgs)
 
 
