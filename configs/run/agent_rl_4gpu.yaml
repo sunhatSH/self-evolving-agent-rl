@@ -1,117 +1,188 @@
 # =============================================================================
-# 4-GPU debug smoke config — validates the rollout+GRPO train loop, not for results.
+# 4-GPU debug smoke config — validates the rollout+GRPO train loop, not results.
 # =============================================================================
 #
-# Purpose: smoke-validate the full rollout + train loop end-to-end on 4×H800
-# (68G each). This is a plumbing check (does rollout -> reward -> GRPO update
-# run without crashing over a few steps?), NOT a run that produces meaningful
-# metrics or checkpoints.
+# Purpose: smoke-validate the full V1 loop end-to-end on 4×H800 (single node):
+# rollout (recipe_custom RemoteAgentLoopManager + e2b sandbox harness) -> reward
+# (omni -> model_reward_omni -> external LLM judge, grounded on ObserverDiffHook)
+# -> GRPO update. A plumbing check (does it run a few steps without crashing?),
+# NOT a run that produces meaningful metrics.
 #
-# Inherits base.yaml via `defaults` (resolved in src/trainer/agent_rl_main.py
-# load_config -> OmegaConf.merge). Only the fields that must shrink for a 4-GPU
-# debug box are overridden here; everything else comes from base.yaml.
+# This mirrors the PROVEN path in the original repo's b1_9b_16gpu.yaml
+# (verl-native V1 agent_loop: use_v1 + custom_sync + transfer_queue +
+# RemoteAgentLoopManager), scaled from 16 GPU (2 node, SP=4) down to 4 GPU
+# (1 node, SP=1, TP=2). trainer.AgentRLTaskRunnerV1 replicates TaskRunnerV1.run
+# WITHOUT any CL buffer/loss -- stock PPO/GRPO.
 #
-# Launch (the launch script exports MODEL_PATH / TRAIN_FILES / VAL_FILES):
+# Launch (the launcher exports MODEL_PATH + sources sandbox/reward env):
 #   bash scripts/train_4gpu.sh configs/run/agent_rl_4gpu.yaml
 #   (long runs in tmux: tmux new -d -s smoke 'bash scripts/train_4gpu.sh')
 #
-# Model: uses a SMALL model on this box (Qwen3.5-9B), NOT the 27B base in
-# base.yaml. Override MODEL_PATH env to point elsewhere.
+# Model: small Qwen3.5-9B (NOT the 27B base), via env MODEL_PATH.
 
 defaults:
+  - ../_generated_ppo_trainer
   - ../base
 
+# ── model (Qwen3.5-9B, remove_padding + flash_attn3 variable-length packing) ──
 actor_rollout_ref:
   model:
-    # Small model for debug (NOT 27B). Launch script exports MODEL_PATH.
     path: ${oc.env:MODEL_PATH,/mnt/afs_toolcall/sunhao4/models/Qwen3.5-9B}
+    model_type: custom_language_model   # engine-selection key (EngineRegistry.new):
+                                        #   CustomFSDPEngineWithLMHead (GDN var-len + routed replay).
+                                        #   MUST be top-level, NOT in override_config (see orig debug §31).
+    use_remove_padding: true
+    use_fused_kernels: true
+    enable_gradient_checkpointing: true
+    fused_kernel_options:
+      impl_backend: triton              # torch backend FusedLinearForPPO chunk bug; triton avoids it
+    override_config:
+      attn_implementation: flash_attention_3
 
+  # ── training engine: 4 GPU FSDP2, SP=1 → DP=4 ──────────────────────────────
+  actor:
+    strategy: fsdp2
+    use_kl_loss: false
+    kl_loss_coef: 0.0
+    entropy_coeff: 0.001
+    use_torch_compile: false
+    clip_ratio_low: 0.2
+    clip_ratio_high: 0.28
+    clip_ratio_c: 10.0
+    optim:
+      lr: 2.0e-6
+      lr_warmup_steps_ratio: 0.0
+      lr_scheduler_type: constant
+    use_dynamic_bsz: true
+    ppo_mini_batch_size: 16             # = train_batch_size (single update/step)
+    ppo_max_token_len_per_gpu: 32768
+    ulysses_sequence_parallel_size: 1   # 4-GPU debug: no sequence parallel (SP=1 → DP=4)
+    fsdp_config:
+      param_offload: true
+      optimizer_offload: true
+      reshard_after_forward: true
+      model_dtype: bfloat16
+
+  # ── rollout: verl-native V1 agent_loop (RemoteAgentLoopManager + sandbox) ────
   rollout:
     name: lightllm
     mode: async
-    n: 4                              # traj/query (GRPO group). Modest for a 4-GPU debug box.
-    tensor_model_parallel_size: 2     # 4 GPUs: 2×TP2 rollout replicas
-    gpu_memory_utilization: 0.6       # conservative on 68G cards
+    tensor_model_parallel_size: 2       # 4 GPUs: 2×TP2 rollout replicas
+    gpu_memory_utilization: 0.6         # conservative on 68G cards (single-node debug)
+    n: 4                                # traj/query (GRPO group). Modest for debug.
+    load_format: auto
     max_model_len: 32768
     max_num_batched_tokens: 6144
     enable_chunked_prefill: false
-    calculate_log_probs: true
+    calculate_log_probs: true           # rollout returns logprobs -> old_log_prob (PPO clip/ppo_kl live)
     log_prob_micro_batch_size_per_gpu: 1
+    log_prob_max_token_len_per_gpu: 32768
     response_length: 12288
-    # Route rollout through our custom multi-agent session manager, local sandbox
-    # (no cluster sandbox creds in debug).
     agent:
-      agent_loop_manager_class: trainer.agent_rollout_manager.AgentLoopManager
-      sandbox_backend: local
-      sessions_per_step: 16           # fallback; primary source is agent_rl.rollout below
+      # ★ V1 entry: recipe_custom RemoteAgentLoopManager (sandbox harness path,
+      # proven in the original repo). AgentRLTaskRunnerV1.init_agent_loop_manager
+      # reads this FQN to pick the manager.
+      agent_loop_manager_class: recipe_custom.agent.agent_loop_manager.RemoteAgentLoopManager
+      agent_loop_config_path: configs/exps/agent_loop_config.yaml
+      default_agent_loop: hermes_agent  # e2b sandbox tool execution (creds via ${oc.env})
+    custom:
+      remote_agent:
+        gateway_count: 2                # scaled down for 4-GPU single-node debug
+        num_session_workers: 4
+        session_timeout: 2400
+        harness_log_dir: ${oc.env:HARNESS_LOG_DIR,logs/harness}
+        harness_log_save_mode: all
+        all_failed_policy: skip         # whole-step all-rollout-failed -> skip step, not crash
     multi_turn:
       format: qwen3_coder
       reasoning_format: qwen3
       max_assistant_turns: 6
       max_tool_response_length: 16384
+    checkpoint_engine:
+      update_weights_bucket_megabytes: 3072
     engine_kwargs:
       lightllm:
         batch_max_tokens: 6144
         enable_multimodal: false
         enable_torch_memory_saver: true
         graph_max_batch_size: 32
-        running_max_req_size: 32       # must be >= sessions_per_step (16)
-        sampling_backend: triton
+        running_max_req_size: 32        # single-replica concurrency cap
+        sampling_backend: flashinfer
         disable_vision: true
         disable_audio: true
-
-  actor:
-    strategy: fsdp
-    ulysses_sequence_parallel_size: 1   # 4-GPU debug: no sequence parallel
-    ppo_mini_batch_size: 16             # = train_batch_size (single update/step)
-    ppo_micro_batch_size_per_gpu: 1
-    ppo_max_token_len_per_gpu: 32768
-    use_dynamic_bsz: true
-    optim:
-      lr: 2.0e-6
-    fsdp_config:
-      param_offload: true
-      optimizer_offload: true
+        disable_symm_mem_allreduce: true  # relies on NCCL_CUMEM_ENABLE=0 (TP rendezvous deadlock guard)
 
   ref:
     log_prob_micro_batch_size_per_gpu: 1
     fsdp_config:
       param_offload: true
 
-# Custom rollout manager reads sessions_per_step from here (see base.yaml header).
-agent_rl:
-  rollout:
-    sessions_per_step: 16             # 16 = a quarter of the 64-query cluster batch
+  nccl_timeout: 3600
 
-# 16 queries/step (a quarter of the 64-query cluster batch).
+# ── reward: omni RewardManager (recipe_custom) -> per-row reward_fn -----------
+# The parquet's reward_model.reward_fn = trainer.model_reward_omni.compute_score
+# (written by scripts/add_reward_fn.py); omni imports that FQN -> our LLM judge
+# (trainer/model_reward.py). ObserverDiffHook evidence arrives via
+# extra_info["observer_report"].
+reward:
+  reward_manager:
+    name: omni
+  reward_model:
+    enable: false
+    rollout:
+      name: vllm
+
+# ── data: 16 queries/step (a quarter of the 64-query cluster batch) -----------
 data:
   train_files: ${oc.env:TRAIN_FILES,/mnt/afs_toolcall/sunhao4/workspace/agentic_cl_research/datasets/train_cl.parquet}
-  val_files: ${oc.env:VAL_FILES,/mnt/afs_toolcall/sunhao4/workspace/agentic_cl_research/datasets/val.parquet}
+  val_files: ${oc.env:VAL_FILES,null}   # offline eval; runner aliases null -> train_files for V1
   train_batch_size: 16
   gen_batch_size: 16
   max_prompt_length: 4096
   max_response_length: 12288
+  shuffle: false
   return_raw_chat: true
   filter_overlong_prompts: true
   trust_remote_code: true
   dataloader_num_workers: 0
+  cache_dir: /tmp/verl_rlhf_cache
 
+# ── algorithm: rollout/train policy IS correction -----------------------------
 algorithm:
   adv_estimator: grpo
+  rollout_correction:
+    rollout_is: token
+    rollout_is_threshold: 2.0
 
+# ── trainer: 4 GPU single node, 4-step smoke ----------------------------------
 trainer:
   nnodes: 1
   n_gpus_per_node: 4
   total_epochs: 1
-  total_training_steps: 4           # smoke: 4 steps, no real convergence
-  save_freq: 100                    # > total_training_steps so no checkpoint ever triggers
-  test_freq: -1                     # no in-loop validation
+  total_training_steps: 4             # smoke: 4 steps, no real convergence
+  save_freq: 100                      # > total_training_steps so no checkpoint ever triggers
+  test_freq: -1                       # offline eval; no in-loop validation
   val_before_train: false
   critic_warmup: 0
-  logger: [console]                 # console only (no swanlab for debug)
-  experiment_name: agent_rl_4gpu_debug
+  logger: [console]                   # console only for debug
+  log_val_generations: 0
   project_name: self-evolving-agent-rl
+  experiment_name: agent_rl_4gpu_debug
+  default_local_dir: ${oc.env:CKPT_DIR,ckpts/agent_rl_4gpu_debug}
+  # ── V1: verl-native main_ppo V1 branch + custom_sync trainer ──
+  use_v1: true
+  v1:
+    trainer_mode: custom_sync
+    sampler:
+      custom_sampler:                 # no replay buffer -- verl built-in sampler
+        path: null
+        name: null
+
+# transfer_queue: V1 data channel (KVBatchMeta handles + tq tensors). custom_sync requires it.
+transfer_queue:
+  enable: true
 
 ray_kwargs:
   ray_init:
+    address: auto
     num_cpus: null

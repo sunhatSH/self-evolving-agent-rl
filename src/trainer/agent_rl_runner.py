@@ -1,16 +1,22 @@
-"""verl RayPPOTrainer construction for the self-evolving agentic-RL system.
+"""verl V1 TaskRunner for the self-evolving agentic-RL system.
 
-Wraps ``verl.trainer.main_ppo.TaskRunner`` to run standard GRPO over multi-agent
-sandbox rollouts. Rollout is verl's native agent_loop (recipe_custom
-``RayPPOTrainerV1`` when available; standard ``RayPPOTrainer`` off-cluster), so
-the actor gets logprobs, tool-output truncation, and rollout correction for
-free. Reward is grounded on the Observer's diff-driven ``ObservationReport`` via
-the ``observer`` reward manager.
+This verl build (``/mnt/afs_toolcall/sunhao4/dependencies/verl``) is a V1 /
+TransferQueue fork: training goes through ``verl.trainer.main_ppo.run_ppo`` ->
+``TaskRunnerV1.run`` (``get_trainer_cls(trainer_mode)`` -> ``tq.init`` ->
+``init_agent_loop_manager`` -> ``trainer.fit(manager)``), NOT the stock upstream
+``RayPPOTrainer`` + ``create_rl_dataset`` API. Rollout is verl's native V1
+agent_loop: ``recipe_custom``'s ``RemoteAgentLoopManager`` drives the sandbox
+harness, so the actor gets logprobs, tool-output truncation and rollout
+correction for free. Reward is grounded on the Observer's diff-driven
+``ObservationReport`` via the ``omni``/``observer`` reward manager + the
+``ObserverDiffHook``.
 
-This runner deliberately does NOT install any experience-replay buffer or custom
-continual-learning loss -- training uses verl's stock PPO/GRPO objective. The
-system's contribution is the multi-agent sampling + sandbox environment +
-diff-driven reward, validated by a plain GRPO run.
+We do NOT fork verl -- we use its official recipe hook: ``run_ppo`` accepts a
+``task_runner_class`` (main_ppo.py "For recipe to change TaskRunner"). Our
+``AgentRLTaskRunnerV1`` replicates the stock ``TaskRunnerV1.run`` three steps
+WITHOUT any experience-replay buffer or custom continual-learning loss -- stock
+PPO/GRPO objective. The system's contribution is the multi-agent sampling +
+sandbox environment + diff-driven reward, validated by a plain GRPO run.
 """
 
 from __future__ import annotations
@@ -21,11 +27,11 @@ from omegaconf import OmegaConf
 
 
 def merge_verl_config(cfg: Any) -> Any:
-    """Ensure the OmegaConf object is compatible with verl RayPPOTrainer.
+    """Ensure the OmegaConf object is compatible with verl.
 
     verl expects a full Hydra-style config. Experiment yamls inherit
-    ``configs/base.yaml``; additional verl fields are supplied via experiment
-    overrides or a verl defaults yaml on the cluster.
+    ``configs/base.yaml`` (+ ``_generated_ppo_trainer`` on the cluster); struct
+    mode is disabled so runtime aliases (e.g. val_files) can be added.
     """
     if not OmegaConf.is_config(cfg):
         cfg = OmegaConf.create(cfg)
@@ -107,209 +113,210 @@ def compute_std_metrics(batch: Any) -> dict[str, float]:
     return out
 
 
-class AgentRLTaskRunner:
-    """``verl.trainer.main_ppo.TaskRunner`` variant for multi-agent GRPO.
+def _make_agent_rl_task_runner_v1():
+    """Build the ``@ray.remote`` ``AgentRLTaskRunnerV1`` class (ray import deferred).
 
-    Same worker wiring as verl's stock TaskRunner; the only differences are:
-      1. rollout uses recipe_custom's native agent_loop when on-cluster;
-      2. the ``observer`` reward manager is imported so reward is grounded on the
-         Observer diff report;
-      3. NO buffer / NO custom CL loss -- stock PPO/GRPO objective.
-
-    Usage::
-
-        run_agent_ppo(cfg)  # ray.init + remote AgentRLTaskRunner.run
-    """
-
-    def __init__(self):
-        self.role_worker_mapping = {}
-        self.mapping = {}
-
-    # ---- Worker registration delegated to verl TaskRunner helpers ---------
-    def add_actor_rollout_worker(self, config):
-        from verl.trainer.main_ppo import TaskRunner
-
-        return TaskRunner.add_actor_rollout_worker(self, config)
-
-    def add_critic_worker(self, config):
-        from verl.trainer.main_ppo import TaskRunner
-
-        TaskRunner.add_critic_worker(self, config)
-
-    def init_resource_pool_mgr(self, config):
-        from verl.trainer.main_ppo import TaskRunner
-
-        return TaskRunner.init_resource_pool_mgr(self, config)
-
-    def add_reward_model_resource_pool(self, config):
-        from verl.trainer.main_ppo import TaskRunner
-
-        TaskRunner.add_reward_model_resource_pool(self, config)
-
-    def add_teacher_model_resource_pool(self, config):
-        from verl.trainer.main_ppo import TaskRunner
-
-        TaskRunner.add_teacher_model_resource_pool(self, config)
-
-    def add_ref_policy_worker(self, config, ref_policy_cls):
-        from verl.trainer.main_ppo import TaskRunner
-
-        return TaskRunner.add_ref_policy_worker(self, config, ref_policy_cls)
-
-    # ---- Main entry -------------------------------------------------------
-    def run(self, config, resume_from: str | None = None) -> None:
-        """Mirror ``TaskRunner.run`` with stock GRPO (no buffer, no CL loss)."""
-        import os
-        import socket
-        from pprint import pprint
-
-        from verl.trainer.main_ppo import create_rl_dataset, create_rl_sampler
-        from verl.trainer.ppo.ray_trainer import RayPPOTrainer
-        from verl.trainer.ppo.utils import need_critic, need_reference_policy
-        from verl.utils import hf_processor, hf_tokenizer
-        from verl.utils.config import validate_config
-        from verl.utils.dataset.rl_dataset import collate_fn
-        from verl.utils.fs import copy_to_local
-
-        config = merge_verl_config(config)
-        print(f"AgentRLTaskRunner hostname: {socket.gethostname()}")
-        pprint(OmegaConf.to_container(config, resolve=True))
-        # Rebuild config from a plain container so list-valued nodes (e.g.
-        # trainer.logger = ['console','swanlab']) become native lists instead of
-        # ListConfig nodes. OmegaConf 2.3 resolve() rejects ListConfig as a
-        # "non-primitive" value; recreating from container sidesteps that.
-        config = OmegaConf.create(OmegaConf.to_container(config, resolve=False))
-        OmegaConf.resolve(config)
-
-        # Import the custom reward manager so its @register("observer") fires
-        # BEFORE RayPPOTrainer resolves reward.reward_manager.name. It folds the
-        # per-row observer diff (non_tensor "observer_report") into extra_info so
-        # the training judge grounds completion on real state. No-op when verl's
-        # reward-loop registry is unavailable (off-cluster).
-        try:
-            import trainer.observer_reward_manager  # noqa: F401
-        except Exception as exc:  # noqa: BLE001 -- registry absent off-cluster
-            print(
-                f"[agent-rl] observer reward manager not registered ({exc}); "
-                "using configured manager",
-                flush=True,
-            )
-
-        actor_rollout_cls, ray_worker_group_cls = self.add_actor_rollout_worker(config)
-        self.add_critic_worker(config)
-        self.add_reward_model_resource_pool(config)
-        self.add_teacher_model_resource_pool(config)
-        self.add_ref_policy_worker(config, actor_rollout_cls)
-
-        validate_config(
-            config=config,
-            use_reference_policy=need_reference_policy(config),
-            use_critic=need_critic(config),
-        )
-
-        local_path = copy_to_local(
-            config.actor_rollout_ref.model.path,
-            use_shm=config.actor_rollout_ref.model.get("use_shm", False),
-        )
-        trust_remote_code = config.data.get("trust_remote_code", False)
-        tokenizer = hf_tokenizer(local_path, trust_remote_code=trust_remote_code)
-        processor = hf_processor(local_path, trust_remote_code=trust_remote_code, use_fast=True)
-
-        resource_pool_manager = self.init_resource_pool_mgr(config)
-
-        # verl HARD-REQUIRES a non-empty val dataloader: RayPPOTrainer._create_dataloader
-        # always builds val from config.data.val_files and asserts len>=1
-        # regardless of test_freq/val_before_train. We evaluate offline after
-        # training (test_freq=-1), so alias val_files -> train_files whenever val
-        # is EMPTY or points at a missing file (verl's create_rl_dataset dies on
-        # None/missing). Set it ON config.data so verl's internal re-build sees it.
-        val_files = config.data.get("val_files", None)
-        _val_missing = bool(val_files) and isinstance(val_files, str) and not os.path.exists(val_files)
-        if not val_files or _val_missing:
-            reason = "empty" if not val_files else f"missing file ({val_files})"
-            OmegaConf.update(config, "data.val_files", config.data.train_files, force_add=True)
-            print(
-                f"[agent-rl] data.val_files {reason} -> aliasing to train_files "
-                "(verl requires a loadable val dataloader; in-loop validation is "
-                "disabled, so this placeholder is never used to validate).",
-                flush=True,
-            )
-
-        train_dataset = create_rl_dataset(
-            config.data.train_files,
-            config.data,
-            tokenizer,
-            processor,
-            is_train=True,
-            max_samples=config.data.get("train_max_samples", -1),
-        )
-        val_dataset = create_rl_dataset(
-            config.data.val_files,
-            config.data,
-            tokenizer,
-            processor,
-            is_train=False,
-            max_samples=config.data.get("val_max_samples", -1),
-        )
-        train_sampler = create_rl_sampler(config.data, train_dataset)
-
-        # Use recipe_custom's RayPPOTrainerV1 (subclass of RayPPOTrainer, same
-        # ctor signature). In init_workers it swaps rollout for recipe_custom's
-        # native agent_loop RolloutManager -> rollout gets logprobs, tool-output
-        # truncation, rollout_correction, Qwen3.5 GDN variable-length packing for
-        # free. Fall back to stock RayPPOTrainer off-cluster so import stays sane.
-        _TrainerCls = RayPPOTrainer
-        try:
-            from recipe_custom.ray_trainer_v1 import RayPPOTrainerV1
-
-            _TrainerCls = RayPPOTrainerV1
-            print("[agent-rl] using recipe_custom.RayPPOTrainerV1 (native agent_loop rollout)", flush=True)
-        except Exception as exc:  # noqa: BLE001 -- recipe_custom absent off-cluster
-            print(
-                f"[agent-rl] recipe_custom unavailable ({exc}); falling back to stock RayPPOTrainer",
-                flush=True,
-            )
-
-        trainer = _TrainerCls(
-            config=config,
-            tokenizer=tokenizer,
-            processor=processor,
-            role_worker_mapping=self.role_worker_mapping,
-            resource_pool_manager=resource_pool_manager,
-            ray_worker_group_cls=ray_worker_group_cls,
-            train_dataset=train_dataset,
-            val_dataset=val_dataset,
-            collate_fn=collate_fn,
-            train_sampler=train_sampler,
-        )
-        trainer.init_workers()
-        # NOTE: no set_loss_fn / no buffer hooks -- stock PPO/GRPO objective.
-
-        # Resume: verl's fit() -> _load_checkpoint() does this natively. Drive it
-        # via resume_mode rather than calling any private loader here.
-        if resume_from:
-            OmegaConf.update(config, "trainer.resume_mode", "resume_path", force_add=True)
-            OmegaConf.update(config, "trainer.resume_from_path", str(resume_from), force_add=True)
-        trainer.fit()
-
-
-def run_agent_ppo(cfg: Any, resume_from: str | None = None) -> None:
-    """Ray entry: init Ray and drive a remote ``AgentRLTaskRunner.run``.
-
-    Mirrors verl's ``main_ppo`` bootstrap but with our task runner. Kept thin so
-    it can be called from ``agent_rl_main`` or a smoke test.
+    Replicates verl ``TaskRunnerV1.run`` verbatim (get_trainer_cls -> tq.init ->
+    trainer.init -> init_agent_loop_manager -> fit) with two additions and ZERO
+    CL injection:
+      1. import the observer/omni reward manager so its ``@register`` fires before
+         the trainer resolves ``reward.reward_manager.name``;
+      2. import ``observer_hook_register`` so the harness ``hooks:`` FQNs
+         (``trainer.observer_hook.ObserverDiffHook`` etc.) resolve without editing
+         verl source.
+    verl ``TaskRunnerV1`` is itself an ``@ray.remote`` actor (can't be subclassed
+    then re-decorated), so we replicate rather than subclass. Defined inside a
+    function so importing this module off-cluster never requires ray.
     """
     import ray
 
-    if not ray.is_initialized():
-        runtime_env = {
-            "env_vars": {
-                "TOKENIZERS_PARALLELISM": "true",
-                "NCCL_DEBUG": "WARN",
-                "VLLM_LOGGING_LEVEL": "WARN",
-            }
-        }
-        ray.init(runtime_env=runtime_env)
+    @ray.remote
+    class AgentRLTaskRunnerV1:
+        """V1 TaskRunner: verl-native V1 flow, stock PPO/GRPO, no buffer/CL loss."""
 
-    runner = ray.remote(num_cpus=1)(AgentRLTaskRunner).remote()
-    ray.get(runner.run.remote(cfg, resume_from))
+        def __init__(self):
+            self.config = None
+            self.trainer = None
+            self.agent_loop_manager = None
+
+        def init_agent_loop_manager(self):
+            # Mirror verl TaskRunnerV1.init_agent_loop_manager: pick the manager by
+            # rollout.agent.agent_loop_manager_class (we configure recipe_custom's
+            # RemoteAgentLoopManager -> sandbox harness). Falls back to verl's
+            # default AgentLoopManagerTQ when unset.
+            from verl.trainer.ppo.v1 import AgentLoopManagerTQ
+            from verl.utils.import_utils import load_class_from_fqn
+
+            fqn = self.config.actor_rollout_ref.rollout.get("agent", {}).get("agent_loop_manager_class")
+            cls = load_class_from_fqn(fqn, "AgentLoopManager") if fqn else AgentLoopManagerTQ
+            self.agent_loop_manager = cls.create(
+                config=self.config,
+                llm_client=self.trainer.get_llm_client(),
+                teacher_client=self.trainer.get_teacher_client(),
+                reward_loop_worker_handles=self.trainer.get_reward_handles(),
+            )
+
+        def run(self, config):
+            import os as _os
+            from pprint import pprint
+
+            import transfer_queue as tq
+            from verl.trainer.ppo.v1 import get_trainer_cls
+
+            # Register the omni/observer reward manager (@register fires on import)
+            # so the trainer resolves reward.reward_manager.name -> our manager,
+            # which folds the observer diff (extra_info["observer_report"]) into
+            # the judge. No-op if the registry is absent.
+            try:
+                import trainer.observer_reward_manager  # noqa: F401
+            except Exception as exc:  # noqa: BLE001 -- registry absent off-cluster
+                print(f"[agent-rl] observer reward manager not registered ({exc})", flush=True)
+
+            # Patch the harness hook factory to accept FQN hook names so the
+            # agent_loop_config `hooks:` (ObserverDiffHook / MkdirDeliverableHook)
+            # load without editing verl source. import == install.
+            try:
+                import trainer.observer_hook_register  # noqa: F401
+            except Exception as exc:  # noqa: BLE001 -- recipe_custom absent off-cluster
+                print(f"[agent-rl] observer hook factory patch not installed ({exc})", flush=True)
+
+            trainer_cls = get_trainer_cls(config.trainer.v1.trainer_mode)  # custom_sync
+            config.transfer_queue.enable = True
+
+            # verl V1 _init_dataloader unconditionally builds a val dataset and
+            # copy_to_local(None) crashes on val_files=null/missing. We evaluate
+            # offline (test_freq=-1 / val_before_train=false), so alias val_files
+            # -> train_files when empty or pointing at a missing file. Preserves
+            # the config's null intent while satisfying V1's hard val requirement.
+            _vf = config.data.get("val_files", None)
+            _val_missing = bool(_vf) and isinstance(_vf, str) and not _os.path.exists(_vf)
+            if not _vf or _val_missing:
+                _reason = "empty" if not _vf else f"missing file ({_vf})"
+                OmegaConf.update(config, "data.val_files", config.data.train_files, force_add=True)
+                print(
+                    f"[agent-rl] data.val_files {_reason} -> aliasing to train_files "
+                    "(V1 requires a loadable val dataloader; in-loop validation is off, "
+                    "so this placeholder is never used to validate).",
+                    flush=True,
+                )
+
+            pprint(OmegaConf.to_container(config, resolve=True))
+            OmegaConf.resolve(config)
+            self.config = config
+
+            tq.init(config.transfer_queue)
+            try:
+                self.trainer = trainer_cls(config=config)
+                self.trainer.init()
+                # NOTE: no CL injection here -- stock PPO/GRPO objective.
+                self.init_agent_loop_manager()
+                self.trainer.fit(self.agent_loop_manager)
+            finally:
+                tq.close()
+
+    return AgentRLTaskRunnerV1
+
+
+# Module-level lazy proxy so ``run_ppo(cfg, task_runner_class=AgentRLTaskRunnerV1)``
+# works without importing ray at module import (off-cluster / unit-test friendly).
+# run_ppo calls ``.remote()`` / ``.options(...).remote()`` on it.
+class _AgentRLTaskRunnerV1Proxy:
+    _cls = None
+
+    def _resolve(self):
+        if _AgentRLTaskRunnerV1Proxy._cls is None:
+            _AgentRLTaskRunnerV1Proxy._cls = _make_agent_rl_task_runner_v1()
+        return _AgentRLTaskRunnerV1Proxy._cls
+
+    def remote(self, *a, **k):
+        return self._resolve().remote(*a, **k)
+
+    def options(self, *a, **k):
+        return self._resolve().options(*a, **k)
+
+
+AgentRLTaskRunnerV1 = _AgentRLTaskRunnerV1Proxy()
+
+
+def run_agent_ppo(cfg: Any, resume_from: str | None = None) -> None:
+    """Entry: run GRPO via verl's native V1 ``run_ppo`` with our task runner.
+
+    Mirrors the reference launch (debug_rl_qwen35_9b.sh): ``run_ppo`` +
+    ``trainer.use_v1=True`` + ``trainer.v1.trainer_mode=custom_sync`` +
+    ``agent_loop_manager_class=RemoteAgentLoopManager``. We do NOT reimplement the
+    training framework; we use verl's recipe hook (``run_ppo(config,
+    task_runner_class=...)``) to swap in ``AgentRLTaskRunnerV1``.
+
+    Ray workers do NOT inherit the driver's shell env: only vars listed in
+    ``runtime_env.env_vars`` reach the actors. ``run_ppo`` builds the runtime_env
+    from ``get_ppo_ray_runtime_env(config)`` merged with
+    ``config.ray_kwargs.ray_init.runtime_env`` -- so we stuff the vars that must
+    reach every actor (PYTHONPATH for source-checkout imports, VERL_USE_EXTERNAL_
+    MODULES for per-worker patch registration, reward-judge creds, allocator /
+    diagnostics) into that config path BEFORE calling run_ppo.
+    """
+    import os
+
+    import ray  # noqa: F401 -- ensures verl's ray init path is consistent
+    from verl.trainer.main_ppo import run_ppo
+
+    cfg = merge_verl_config(cfg)
+    if resume_from:
+        OmegaConf.update(cfg, "trainer.resume_mode", "resume_path", force_add=True)
+        OmegaConf.update(cfg, "trainer.resume_from_path", str(resume_from), force_add=True)
+
+    # Env that must reach every Ray actor (worker does not inherit driver shell).
+    _passthrough: dict[str, str] = {}
+    for _k in (
+        "PYTHONPATH",                 # source-checkout imports (verl/lightllm/src)
+        "VERL_USE_EXTERNAL_MODULES",  # per-worker external patch registration
+        "AGENT_RL_FAKE_ROLLOUT",      # debug: skip sandbox, fabricate trajectories
+        "AGENT_RL_FAKE_ROLLOUT_LEN",
+        "VERIFIER_ENABLE",            # VerifierHook runs in AgentSessionWorker
+        "VERIFIER_GEN_MAX_TOKENS",
+        # reward judge credentials (RewardLoopWorker in the actor process)
+        "TOKENHUB_API_KEY",
+        "JUDGE_API_BASE",
+        "JUDGE_MODEL",
+        "REWARD_API_BASE",
+        "REWARD_MODEL",
+        "REWARD_API_KEY",
+        "REWARD_JUDGE_MAX_TOKENS",
+        # sandbox (e2b Tencent) + web tool credentials for the harness
+        "E2B_API_KEY",
+        "E2B_DOMAIN",
+        "SERPER_API_KEY",
+        "JINA_API_KEY",
+        "HARNESS_LOG_DIR",
+        # memory allocator (long-run gateway OOM guard)
+        "LD_PRELOAD",
+        "MALLOC_CONF",
+        "MALLOC_ARENA_MAX",
+        "MALLOC_TRIM_THRESHOLD_",
+        # file logger + diagnostics
+        "VERL_FILE_LOGGER_PATH",
+        "NCCL_DEBUG",
+        "RAY_DEDUP_LOGS",
+        "VERL_LOGGING_LEVEL",
+    ):
+        _v = os.environ.get(_k)
+        if _v is not None:
+            _passthrough[_k] = _v
+
+    # NCCL cuMem off (lightllm torch_memory_saver conflicts with NCCL default
+    # cuMem P2P -> TP rendezvous deadlock). Overridable via AGENT_RL_NCCL_CUMEM.
+    _passthrough.setdefault("NCCL_CUMEM_ENABLE", os.environ.get("AGENT_RL_NCCL_CUMEM", "0"))
+
+    if _passthrough:
+        _existing = OmegaConf.select(cfg, "ray_kwargs.ray_init.runtime_env.env_vars") or {}
+        OmegaConf.update(
+            cfg,
+            "ray_kwargs.ray_init.runtime_env.env_vars",
+            {**_existing, **_passthrough},
+            force_add=True,
+        )
+        print(f"[agent-rl] forwarding env to Ray workers: {sorted(_passthrough)}", flush=True)
+
+    # verl-native run_ppo does ray.init (+ transfer_queue env) and starts the task
+    # runner actor. We pass AgentRLTaskRunnerV1 in place of the default TaskRunnerV1.
+    run_ppo(cfg, task_runner_class=AgentRLTaskRunnerV1)

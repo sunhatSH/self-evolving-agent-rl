@@ -49,8 +49,27 @@ export PYTHONPATH="$LIGHTLLM_DIR:$VERL_DIR:$ROOT/src:$ROOT${PYTHONPATH:+:$PYTHON
 
 cd "$ROOT"
 
-# Register our verl external modules (rollout manager FQN + stability patches)
-# the same way the full trainer does. Best-effort: harmless if absent.
+# ── credentials: e2b sandbox (tencent.env) + judge/swanlab (.env) ────────────
+# The V1 rollout drives the e2b hermes sandbox; the omni reward calls the LLM
+# judge. Both read creds from env. Source the same loaders _train_impl.sh uses.
+# `set -a` so sourced KEY=VALUE lines are exported to the Python process.
+if [ -f "$DIR/env/load_tencent_env.sh" ]; then
+  set -a; # shellcheck disable=SC1090
+  source "$DIR/env/load_tencent_env.sh" || true
+  set +a
+fi
+if [ -f "$DIR/env/load_training_env.sh" ]; then
+  set -a; # shellcheck disable=SC1090
+  source "$DIR/env/load_training_env.sh" || true
+  set +a
+fi
+# e2b: tencent Agent Runtime uses an ark_ key -> skip the e2b_ prefix check.
+export E2B_VALIDATE_API_KEY="${E2B_VALIDATE_API_KEY:-false}"
+# NCCL cuMem off (lightllm torch_memory_saver vs NCCL cuMem P2P deadlock guard).
+export NCCL_CUMEM_ENABLE="${NCCL_CUMEM_ENABLE:-0}"
+
+# Register our verl external modules (rollout patches + FQN hook factory) the
+# same way the full trainer does. Best-effort: harmless if absent.
 if [ -f "$DIR/env/verl_external_modules.sh" ]; then
   # shellcheck disable=SC1090
   source "$DIR/env/verl_external_modules.sh" || true
@@ -62,6 +81,8 @@ echo "[train_4gpu] 4-step smoke (validate loop, NOT for results)"
 echo "[train_4gpu] CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES"
 echo "[train_4gpu] MODEL_PATH=$MODEL_PATH"
 echo "[train_4gpu] VERL_DIR=$VERL_DIR  LIGHTLLM_DIR=$LIGHTLLM_DIR"
+echo "[train_4gpu] E2B_DOMAIN=${E2B_DOMAIN:-<unset>}  E2B_API_KEY=${E2B_API_KEY:+<set>}"
+echo "[train_4gpu] TOKENHUB_API_KEY=${TOKENHUB_API_KEY:+<set>}"
 echo "[train_4gpu] PYTHONPATH=$PYTHONPATH"
 echo "[train_4gpu] cwd=$ROOT  config=$CFG"
 echo "[train_4gpu] cmd: $PY -m trainer.agent_rl_main --config $CFG $*"
