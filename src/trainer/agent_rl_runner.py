@@ -180,6 +180,14 @@ def _make_agent_rl_task_runner_v1():
             except Exception as exc:  # noqa: BLE001 -- recipe_custom absent off-cluster
                 print(f"[agent-rl] observer hook factory patch not installed ({exc})", flush=True)
 
+            # Patch the harness factory to accept FQN harness names so our
+            # MultiTurnHermesHarness (agents.multi_turn_harness) loads via
+            # agent_loop_config `harness.name` without editing verl source.
+            try:
+                import trainer.harness_register  # noqa: F401
+            except Exception as exc:  # noqa: BLE001 -- recipe_custom absent off-cluster
+                print(f"[agent-rl] harness factory patch not installed ({exc})", flush=True)
+
             trainer_cls = get_trainer_cls(config.trainer.v1.trainer_mode)  # custom_sync
             config.transfer_queue.enable = True
 

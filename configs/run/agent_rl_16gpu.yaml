@@ -1,0 +1,177 @@
+# =============================================================================
+# 16-GPU 正式训练配置（2 节点 × 8 卡）——自进化 RL 系统 20-step 训练
+# =============================================================================
+#
+# 目的：在 16×H800 上跑 20 步强化学习训练，验证整套自进化系统能被真正"驱动起来"。
+# 采用标准 GRPO（非算法最优，只为证明系统可行）。采样走 verl 原生 V1 agent_loop
+# （RemoteAgentLoopManager + e2b 沙箱 harness），奖励走差分驱动的外部裁判。
+#
+# 采样规模设计（自进化核心）：在固定每步总轨迹预算下，用 1/(1+追问次数) 的种子
+# 查询、以固定轮数多轮追问补足总量——总量不变，但采样从单轮变为多轮。
+#   - 单轮基线：64 query × n8 = 512 轨迹/step
+#   - 多轮方案：16 query × n8 × (1+3 轮) = 512 轨迹/step（总量不变，多轮）
+# 多轮追问链路若受工程约束暂未稳定，可退化为单轮等价总量（见开题报告 §三.5）。
+#
+# 启动（长任务，必须 tmux/nohup 后台）：
+#   tmux new -d -s train 'bash scripts/train_16gpu.sh configs/run/agent_rl_16gpu.yaml'
+#   tmux attach -t train
+#
+# 模型：Qwen3.5-9B（remove_padding + flash_attn3 变长打包，GDN 结构）。
+
+defaults:
+  - ../_generated_ppo_trainer
+  - ../base
+
+# ── 模型（Qwen3.5-9B，remove_padding + flash_attn3 变长打包）──────────────────
+actor_rollout_ref:
+  model:
+    path: ${oc.env:MODEL_PATH,/mnt/afs_toolcall/sunhao4/models/Qwen3.5-9B}
+    model_type: custom_language_model   # 引擎选择键：CustomFSDPEngineWithLMHead（GDN 变长+路由重放）
+    use_remove_padding: true
+    use_fused_kernels: true
+    enable_gradient_checkpointing: true
+    fused_kernel_options:
+      impl_backend: triton              # torch backend FusedLinearForPPO chunk bug；triton 绕开
+    override_config:
+      attn_implementation: flash_attention_3
+
+  # ── 训练引擎（16 GPU FSDP2, SP=4 → DP=4）─────────────────────────────────────
+  actor:
+    strategy: fsdp2
+    use_kl_loss: false
+    kl_loss_coef: 0.0
+    entropy_coeff: 0.001               # 固定开启，防 Echo Trap（策略多样性坍缩）
+    use_torch_compile: false
+    clip_ratio_low: 0.2
+    clip_ratio_high: 0.28
+    clip_ratio_c: 10.0
+    optim:
+      lr: 2.0e-6
+      lr_warmup_steps_ratio: 0.03
+      lr_scheduler_type: constant
+    use_dynamic_bsz: true
+    ppo_mini_batch_size: 64             # = train_batch_size（单更新/step）
+    ppo_max_token_len_per_gpu: 32768    # = max_token_length(131072)/SP(4)
+    ulysses_sequence_parallel_size: 4   # SP=4 → DP=16÷4=4
+    fsdp_config:
+      param_offload: true
+      optimizer_offload: true
+      reshard_after_forward: true
+      model_dtype: bfloat16
+
+  # ── rollout：verl 原生 V1 agent_loop（RemoteAgentLoopManager + e2b 沙箱）──────
+  rollout:
+    name: lightllm
+    mode: async
+    tensor_model_parallel_size: 2
+    gpu_memory_utilization: 0.65        # 16卡 colocate 训练+跨节点NCCL，砍 KV 池留余量
+    n: 8                                # traj/query（GRPO 组大小）
+    load_format: auto
+    max_model_len: 65536                # Hermes Agent 要求 >=64K context
+    max_num_batched_tokens: 6144
+    enable_chunked_prefill: false
+    calculate_log_probs: true           # rollout 带回 logprob → PPO clip/ppo_kl 生效
+    log_prob_micro_batch_size_per_gpu: 1
+    log_prob_max_token_len_per_gpu: 32768
+    response_length: 12288
+    agent:
+      agent_loop_manager_class: recipe_custom.agent.agent_loop_manager.RemoteAgentLoopManager
+      agent_loop_config_path: configs/exps/agent_loop_config.yaml
+      default_agent_loop: multi_turn_hermes_agent  # multi-turn: Questioner-driven K=3 follow-ups
+    custom:
+      remote_agent:
+        gateway_count: 8
+        num_session_workers: 8
+        session_timeout: 2400
+        harness_log_dir: ${oc.env:HARNESS_LOG_DIR,logs/harness}
+        harness_log_save_mode: all
+        all_failed_policy: skip
+    multi_turn:
+      format: qwen3_coder
+      reasoning_format: qwen3
+      max_assistant_turns: 6
+      max_tool_response_length: 16384
+    checkpoint_engine:
+      update_weights_bucket_megabytes: 3072
+    engine_kwargs:
+      lightllm:
+        batch_max_tokens: 6144
+        enable_multimodal: false
+        enable_torch_memory_saver: true
+        graph_max_batch_size: 64
+        running_max_req_size: 64        # 16卡=8副本，每步512轨迹÷8=64/副本
+        sampling_backend: flashinfer
+        disable_vision: true
+        disable_audio: true
+        disable_symm_mem_allreduce: true
+
+  ref:
+    log_prob_micro_batch_size_per_gpu: 1
+    fsdp_config:
+      param_offload: true
+
+  nccl_timeout: 3600
+
+# ── reward：omni RewardManager → per-row reward_fn → 外部裁判（差分驱动）──────
+reward:
+  reward_manager:
+    name: omni
+  reward_model:
+    enable: false
+    rollout:
+      name: vllm
+
+# ── data：16 query/step（1/4 of 64）× n8 × (1+3 多轮) = 512 轨迹/step ──────────
+# 多轮追问链路稳定后启用；未稳定时退化为 64 query × n8 单轮等价总量。
+data:
+  train_files: ${oc.env:TRAIN_FILES,/mnt/afs_toolcall/sunhao4/workspace/agentic_cl_research/datasets/train_cl.parquet}
+  val_files: ${oc.env:VAL_FILES,null}
+  train_batch_size: 16                 # 种子查询数（1/4 of 64，靠多轮追问补足总量）
+  gen_batch_size: 16
+  max_prompt_length: 4096
+  max_response_length: 12288
+  shuffle: false
+  return_raw_chat: true
+  filter_overlong_prompts: true
+  trust_remote_code: true
+  dataloader_num_workers: 4
+  cache_dir: /tmp/verl_rlhf_cache
+
+# ── algorithm：rollout/train 策略 IS 修正 ─────────────────────────────────────
+algorithm:
+  adv_estimator: grpo
+  rollout_correction:
+    rollout_is: token
+    rollout_is_threshold: 2.0
+
+# ── trainer：16 GPU 2 节点，20-step 正式训练 ──────────────────────────────────
+trainer:
+  nnodes: ${oc.env:NNODES,2}
+  n_gpus_per_node: ${oc.env:N_GPUS_PER_NODE,8}
+  total_epochs: 1
+  total_training_steps: 20             # 自进化 20-step 训练
+  save_freq: 10                        # 每 10 步存一次 checkpoint
+  test_freq: -1                        # 离线评测，关在线验证
+  val_before_train: false
+  critic_warmup: 0
+  logger: [console, swanlab]            # 正式训练记 swanlab
+  log_val_generations: 50
+  project_name: self-evolving-agent-rl
+  experiment_name: agent_rl_16gpu
+  default_local_dir: ${oc.env:CKPT_DIR,ckpts/agent_rl_16gpu}
+  use_v1: true
+  v1:
+    trainer_mode: custom_sync
+    sampler:
+      custom_sampler:
+        path: null
+        name: null
+
+# transfer_queue：V1 数据通道，custom_sync 必须开。
+transfer_queue:
+  enable: true
+
+ray_kwargs:
+  ray_init:
+    address: auto
+    num_cpus: null

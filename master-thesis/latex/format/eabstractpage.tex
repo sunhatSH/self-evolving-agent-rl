@@ -1,0 +1,14 @@
+% English abstract
+\begin{abstracten}
+Agentic large language models have moved from single-turn question answering to multi-step tool use and environment interaction, and after deployment they keep refining their policy through periodic reinforcement learning. Such training hits a practical bottleneck: \textbf{RL demands massive interaction trajectories and trustworthy rewards, yet human annotation is expensive and does not scale}. If the reward is taken from the agent's own self-report, the model quickly learns to \textbf{falsely claim success}---a form of reward hacking; if it relies on human scoring, it cannot sustain continual, large-scale policy updates.
+
+This thesis proposes and implements a \textbf{self-evolving reinforcement learning system for agents}: a deployed agent interacts with tools inside a sandbox and \textbf{autonomously generates experience}, a multi-agent loop supplies trustworthy automatic rewards, and RL updates the policy accordingly---the model self-evolves without human annotation. Three core contributions:
+
+First, a \textbf{multi-agent sampling architecture}. An \emph{actor} solves the task by multi-step ReAct-style tool calls inside a code sandbox; an \emph{observer} produces a state report grounded in the \textbf{before/after state difference} of the sandbox; a \emph{questioner}, playing a persona-driven simulated user, drives multi-turn follow-ups so that a single seed task expands into a multi-turn dialogue. Together they turn ``one sample'' into ``a stretch of autonomous interaction experience.''
+
+Second, a \textbf{difference-driven trustworthy reward}. The reward is not taken from the agent's self-report but assigned by a single frozen external LLM judge grounded in the observer's \textbf{real environment state difference}, aggregated multiplicatively over completion, correctness, trajectory quality, and safety, with safety as a binary gate. Anchoring on the real state difference rather than self-report suppresses reward hacking by construction.
+
+Third, a \textbf{system implementation and end-to-end validation}. The sampling and reward mechanisms are integrated into a complete agentic RL system with a fully asynchronous, policy-decoupled deployment of inference and training, closing the sample--reward--update self-evolution loop in a real sandbox environment.
+
+We implement and end-to-end validate the whole system on a Qwen3.5-9B agent across tool-use tasks in multiple capability domains, showing that it closes the sample--reward--update self-evolution loop without human annotation.
+\end{abstracten}

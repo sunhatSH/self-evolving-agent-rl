@@ -1,0 +1,118 @@
+% References for the agentic continual-learning paper.
+% 信源:doc/refs.md(论文/学位论文参考文献单一信源)。
+% 仅保留当前论文实际引用的条目;新增引用前先在 doc/refs.md 登记用途,再同步本文件。
+% 旧 bib 曾因重复 arXiv ID 污染(A1/A2 同 1811.11682 等),已清理。
+
+% ── A. Replay Buffer 优化 & Continual RL ──────────────────────────────────────
+
+@article{A2,
+  title  = {Experience Replay for Continual Learning (CLEAR)},
+  author = {Rolnick, David and others},
+  year   = {2019},
+  eprint = {1811.11682},
+  archivePrefix = {arXiv},
+  note   = {Task-agnostic vanilla ER + V-trace + behavioral cloning matches EWC/P\&C; our R0 baseline.}
+}
+
+@article{A9,
+  title  = {Prioritized Generative Replay},
+  author = {Wang, Renhao and others},
+  year   = {2023},
+  eprint = {2311.11557},
+  archivePrefix = {arXiv},
+  note   = {Optimal replay distribution from a regularized RL objective; basis for priority weighting.}
+}
+
+@article{A11,
+  title   = {Overcoming catastrophic forgetting in neural networks},
+  author  = {Kirkpatrick, James and Pascanu, Razvan and Rabinowitz, Neil and Veness, Joel and Desjardins, Guillaume and Rusu, Andrei A. and Milan, Kieran and Quan, John and Ramalho, Tiago and Grabska-Barwinska, Agnieszka and Hassabis, Demis and Clopath, Claudia and Kumaran, Dharshan and Hadsell, Raia},
+  journal = {Proceedings of the National Academy of Sciences},
+  volume  = {114},
+  number  = {13},
+  pages   = {3521--3526},
+  year    = {2017},
+  note    = {EWC: Fisher-weighted quadratic penalty on important parameters.}
+}
+
+@inproceedings{A12,
+  title     = {Continual Learning Through Synaptic Intelligence},
+  author    = {Zenke, Friedemann and Poole, Ben and Ganguli, Surya},
+  booktitle = {International Conference on Machine Learning (ICML)},
+  series    = {PMLR},
+  volume    = {70},
+  pages     = {3987--3995},
+  year      = {2017},
+  eprint    = {1703.04200},
+  archivePrefix = {arXiv},
+  note      = {SI: online per-synapse importance; regularization-based CL alongside EWC.}
+}
+
+% ── B. LLM Agent continual learning & RL training ─────────────────────────────
+
+@article{B2,
+  title  = {RFT Naturally Mitigates Forgetting in Continual Post-Training},
+  author = {Lai, Song and others},
+  year   = {2026},
+  eprint = {2507.05386},
+  archivePrefix = {arXiv},
+  note   = {RFT forgets less than SFT; motivates RL-based continual post-training.}
+}
+
+@article{B4,
+  title  = {Multi-Turn RL for LLM Agents: The Echo Trap},
+  author = {Wang, Zihan and others},
+  year   = {2025},
+  eprint = {2504.20073},
+  archivePrefix = {arXiv},
+  note   = {Naive PPO/GRPO in multi-turn agents collapses via Echo Trap; motivates the entropy term.}
+}
+
+@article{B7,
+  title  = {It Takes Two: Your GRPO Is Secretly DPO},
+  author = {Wu, Yihong and Ma, Liheng and Ding, Lei and Li, Muzhi and Wang, Xinyu and Chen, Kejia and Su, Zhan and Huang, Chenyang and Zhang, Zhanguang and Li, Derek and Zhang, Yingxue and Nie, Jian-Yun and Coates, Mark},
+  year   = {2025},
+  eprint = {2510.00977},
+  archivePrefix = {arXiv},
+  note   = {GRPO variance reduction is driven by mini-batch rollout count B = Q*G.}
+}
+
+@article{B8,
+  title  = {DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models},
+  author = {Shao, Zhihong and Wang, Peiyi and Zhu, Qihao and Xu, Runxin and Song, Junxiao and Bi, Xiao and Zhang, Haowei and Zhang, Mingchuan and Li, Y. K. and Wu, Y. and Guo, Daya},
+  year   = {2024},
+  eprint = {2402.03300},
+  archivePrefix = {arXiv},
+  note   = {Original GRPO paper: group-relative advantage estimation; our policy-gradient baseline.}
+}
+
+% ── C. GUI Agent RL & continual learning ──────────────────────────────────────
+
+@article{C1,
+  title  = {CGL: Advancing Continual GUI Learning via RFT},
+  author = {Yao, Zhenquan and others},
+  year   = {2025},
+  eprint = {2504.20073},
+  archivePrefix = {arXiv},
+  note   = {GRPO's Matthew effect yields natural forgetting resistance.}
+}
+
+% ── D. Classic foundations ────────────────────────────────────────────────────
+
+@article{D1,
+  title  = {Gradient Episodic Memory for Continual Learning (GEM)},
+  author = {Lopez-Paz, David and Ranzato, Marc'Aurelio},
+  year   = {2017},
+  eprint = {1706.08840},
+  archivePrefix = {arXiv}
+}
+
+% ── E. RL training framework ──────────────────────────────────────────────────
+
+@article{E1,
+  title  = {HybridFlow: A Flexible and Efficient RLHF Framework},
+  author = {Sheng, Guangming and Zhang, Chi and Ye, Zilingfeng and Wu, Xibin and Zhang, Wang and Zhang, Ru and Peng, Yanghua and Lin, Haibin and Wu, Chuan},
+  year   = {2024},
+  eprint = {2409.19256},
+  archivePrefix = {arXiv},
+  note   = {The verl RL framework; our composite CL objective is injected with no fork.}
+}

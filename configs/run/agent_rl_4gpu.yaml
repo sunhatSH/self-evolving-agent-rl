@@ -86,7 +86,7 @@ actor_rollout_ref:
       # reads this FQN to pick the manager.
       agent_loop_manager_class: recipe_custom.agent.agent_loop_manager.RemoteAgentLoopManager
       agent_loop_config_path: configs/exps/agent_loop_config.yaml
-      default_agent_loop: hermes_agent  # e2b sandbox tool execution (creds via ${oc.env})
+      default_agent_loop: multi_turn_hermes_agent  # multi-turn: Questioner-driven K=3 follow-ups
     custom:
       remote_agent:
         gateway_count: 2                # scaled down for 4-GPU single-node debug
