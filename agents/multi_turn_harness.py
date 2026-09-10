@@ -176,9 +176,14 @@ class MultiTurnHermesHarness(HermesHarness):
                 prev_fs = post_fs
                 prev_sys = post_sys
 
-                # Ask Questioner for the next query.
+                # Ask Questioner for the next query. next_query is synchronous
+                # (httpx.post to tokenhub); run it in a thread so it doesn't
+                # block the event loop / gateway generation_lock while waiting
+                # on the network round-trip.
                 try:
-                    next_q = self.questioner.next_query(persona, report, history)
+                    next_q = await asyncio.to_thread(
+                        self.questioner.next_query, persona, report, history
+                    )
                 except Exception:  # noqa: BLE001 -- Questioner failure must not crash session
                     logger.warning(
                         "Questioner failed on turn %d, ending multi-turn loop early",

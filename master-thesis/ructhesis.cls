@@ -86,9 +86,9 @@ pdftitle={\@title},
 pdfauthor={\@author},
 pdfsubject={中国人民大学学位论文}}
 }
-\IfFontExistsTF{TimesNewRomanPSMT}{\setmainfont{TimesNewRomanPSMT}}{\setmainfont{DejaVu Serif}}
-\IfFontExistsTF{ArialMT}{\setsansfont{ArialMT}}{\setsansfont{DejaVu Sans}}
-\IfFontExistsTF{CourierNewPSMT}{\setmonofont{CourierNewPSMT}}{\setmonofont{DejaVu Sans Mono}}
+\setmainfont{Liberation Serif}
+\setsansfont{Liberation Sans}
+\setmonofont{Liberation Mono}
 \xeCJKsetup{AutoFakeSlant={true}}
 \xeCJKsetup{AutoFakeBold={true}}
 \setCJKmainfont{simsun.ttc}

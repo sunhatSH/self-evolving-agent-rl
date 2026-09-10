@@ -20,7 +20,9 @@ if [[ "${1:-}" == "clean" ]]; then
 fi
 
 # latexmk 自动跑 xelatex → biber → xelatex ×2（biber 解析 latex/ref.bib）
+# biblatex 用 biber 后端; latexmk 靠 .latexmkrc 指定 biber
 latexmk -xelatex \
+  -pdfxe \
   -interaction=nonstopmode \
   -file-line-error \
   -output-directory=最终稿 \
