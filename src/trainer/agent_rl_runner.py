@@ -188,6 +188,13 @@ def _make_agent_rl_task_runner_v1():
             except Exception as exc:  # noqa: BLE001 -- recipe_custom absent off-cluster
                 print(f"[agent-rl] harness factory patch not installed ({exc})", flush=True)
 
+            # Register our self-evolving trainer (agent_rl_sync): oversample +
+            # 淘汰 + 选组 (advantage-driven). import triggers @register_trainer.
+            try:
+                import trainer.agent_rl_sync_trainer  # noqa: F401
+            except Exception as exc:  # noqa: BLE001 -- recipe_custom absent off-cluster
+                print(f"[agent-rl] agent_rl_sync trainer not registered ({exc})", flush=True)
+
             trainer_cls = get_trainer_cls(config.trainer.v1.trainer_mode)  # custom_sync
             config.transfer_queue.enable = True
 
@@ -217,6 +224,9 @@ def _make_agent_rl_task_runner_v1():
                 self.trainer = trainer_cls(config=config)
                 self.trainer.init()
                 # NOTE: no CL injection here -- stock PPO/GRPO objective.
+                # veomni parallel_state 在 WorkerDict 进程里由
+                # trainer.parallel_state_register (FSDPEngine.__init__ patch) 初始化,
+                # 不在 driver 侧调 (driver 无 torch.distributed process group).
                 self.init_agent_loop_manager()
                 self.trainer.fit(self.agent_loop_manager)
             finally:
@@ -296,6 +306,8 @@ def run_agent_ppo(cfg: Any, resume_from: str | None = None) -> None:
         "SERPER_API_KEY",
         "JINA_API_KEY",
         "HARNESS_LOG_DIR",
+        # TEXT_MODEL_ONLY: 控制 LightLLM infer_struct (1=冻结视觉保纯文本能力, 对齐 CL)
+        "TEXT_MODEL_ONLY",
         # memory allocator (long-run gateway OOM guard)
         "LD_PRELOAD",
         "MALLOC_CONF",

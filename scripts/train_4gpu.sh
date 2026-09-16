@@ -67,6 +67,9 @@ fi
 export E2B_VALIDATE_API_KEY="${E2B_VALIDATE_API_KEY:-false}"
 # NCCL cuMem off (lightllm torch_memory_saver vs NCCL cuMem P2P deadlock guard).
 export NCCL_CUMEM_ENABLE="${NCCL_CUMEM_ENABLE:-0}"
+# TEXT_MODEL_ONLY=1: 冻结视觉权重、保纯文本能力(Qwen3.5-9B 是多模态基座, disable_vision 会损能力).
+# 控制 LightLLM 的 infer_struct(0/1=原生 M-RoPE, 2=标准 RoPE). 对齐 CL _train_impl.sh.
+export TEXT_MODEL_ONLY="${TEXT_MODEL_ONLY:-1}"
 
 # Register our verl external modules (rollout patches + FQN hook factory) the
 # same way the full trainer does. Best-effort: harmless if absent.

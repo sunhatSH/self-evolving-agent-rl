@@ -199,6 +199,19 @@ class ObserverDiffHook(AgentRunHook):
     run_on_agent_error = True
 
     async def prepare(self, sandbox: Any, ctx: Any, state: Any) -> None:
+        # 跨 step 状态继承: 若 extra_info 带上轮 workspace 快照 → 恢复到本轮新沙箱
+        # (fs-seed 注入之后, baseline 采集之前 → baseline 含继承状态, diff 只暴露本轮新增)。
+        try:
+            extra = getattr(ctx, "extra", None) or {}
+            ei = extra.get("extra_info") or {}
+            snap = ei.get("_workspace_snapshot")
+            if snap:
+                from trainer.sandbox_snapshot import restore_workspace_b64
+
+                await restore_workspace_b64(sandbox, snap)
+        except Exception as exc:  # noqa: BLE001 -- best-effort, never crash rollout
+            print(f"[cross-step] prepare restore skipped: {exc}", flush=True)
+
         # agent 跑之前采 baseline（fs-seed 已由 runner 在 write_agent_assets 阶段注入 ./inputs，
         # 所以 baseline 已含输入文件 → diff 只暴露 agent 新产出/修改，不把输入文件误判为交付物）。
         from agents.observer import _SNAPSHOT_PROBE, _SYS_PROBE
@@ -277,6 +290,18 @@ class ObserverDiffHook(AgentRunHook):
         hermes_text = _format_hermes_log(hermes_log)
         if hermes_text:
             state.reward_info["hermes_log"] = hermes_text
+
+        # 跨 step 状态继承: 沙箱关闭前存 workspace 快照(tar+base64) → reward_info
+        # → TQ → cross_step 取最优组的快照 → step t+1 恢复到新沙箱。best-effort。
+        try:
+            from trainer.sandbox_snapshot import snapshot_workspace_b64
+
+            snap = await snapshot_workspace_b64(sandbox)
+            if snap:
+                state.reward_info["_workspace_snapshot"] = snap
+        except Exception as exc:  # noqa: BLE001 -- never crash reward
+            print(f"[cross-step] run snapshot skipped: {exc}", flush=True)
+
         print(
             f"[cl][observer_hook] diff added={len(diff.get('added', []))} "
             f"modified={len(diff.get('modified', []))} source_data_chars={len(src_text)} "

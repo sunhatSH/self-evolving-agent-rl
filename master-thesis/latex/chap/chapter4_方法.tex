@@ -1,0 +1,92 @@
+\chapter{方法}
+
+本章阐述自进化强化学习系统的核心方法设计，重点为跨步自进化机制，辅以多智能体自主数据产生、超生-淘汰-选组与差分驱动奖励。
+
+\section{系统总体架构}
+
+系统总体架构如图~\ref{fig:architecture} 所示。系统由三个协同智能体（执行者、观察者、提问者）、沙箱环境、外部冻结裁判、以及 GRPO 训练器组成，形成"采样→奖励→淘汰+选组→GRPO 更新→跨步自进化"的闭环。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig_fig1_architecture_zh.png}
+    \caption{系统总体架构}
+    \label{fig:architecture}
+\end{figure}
+
+\section{跨步自进化机制}
+
+跨步自进化是本文的核心方法，使系统除初始种子外自主产生所有后续训练任务。其完整闭环如图~\ref{fig:dataflow} 所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig_fig2_dataflow_zh.png}
+    \caption{数据-训练完整流程}
+    \label{fig:dataflow}
+\end{figure}
+
+每个训练步完成后，系统执行以下跨步流程：
+
+\textbf{（1）取存活组最优轨迹。} 从淘汰后的存活组中，每组取 reward 最高的轨迹及其沙箱状态快照。
+
+\textbf{（2）执行概括。} 观察者用 LLM 概括上轮最优轨迹的执行情况——做了什么、产出了什么、还差什么。这一步避免直接沿用轨迹文本导致模型偏移，概括而非复述。
+
+\textbf{（3）沙箱状态继承。} 将上轮最优轨迹的沙箱文件系统状态保存并恢复到本轮新沙箱，使智能体在上轮产出的文件基础上继续工作。这是真状态继承，而非仅文本描述。
+
+\textbf{（4）种子生成。} 提问者基于执行概括与当前沙箱状态，生成符合人设的新种子查询。本轮种子数 $S$ 等于上一轮存活组数 $R$，超生量随淘汰动态收缩。
+
+跨步自进化的闭环如图~\ref{fig:self_evolve} 所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/fig_fig4_self_evolve_loop_zh.png}
+    \caption{跨步自进化闭环}
+    \label{fig:self_evolve}
+\end{figure}
+
+\section{多智能体自主数据产生}
+
+三个协同智能体把一次采样变成一段自主交互经验：
+
+\textbf{执行者（actor）}：被训练的策略 $\pi_\theta$，在代码沙箱中以 ReAct 方式多步调用工具求解任务，产生交互轨迹。
+
+\textbf{观察者（observer）}：在轨迹执行前后对沙箱状态各拍一次快照，计算确定性状态差分（文件系统变更及内容、系统状态变更），产出客观状态报告。这是奖励的 ground truth，不用 LLM。
+
+\textbf{提问者（questioner）}：扮演具人设的模拟用户，在跨步自进化时基于上一轮执行概括与沙箱状态生成下一轮种子查询。
+
+三者协作使训练数据的产生、取证、追问全部自主化，无需人工标注。
+
+\section{超生-淘汰-选组}
+
+每个训练步将推理与训练解耦，如图~\ref{fig:oversample} 所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/fig_fig3_oversample_select_zh.png}
+    \caption{超生-淘汰-选组机制}
+    \label{fig:oversample}
+\end{figure}
+
+\textbf{超生（Sample）}：推理阶段用 $S$ 个种子查询，每个复制 $n$ 份（GRPO 组大小），rollout 产生 $S \times n$ 条轨迹。第一步 $S = 2N$（$N$ 为训练组数），后续步 $S = R$（上一轮存活组数）。
+
+\textbf{淘汰（Eliminate）}：丢弃最优奖励同时满足"处于后 20\% 且低于阈值"的组，至少保留 80\%。残缺组（因 rollout 失败不足 $n$ 条）直接丢弃。淘汰后剩 $R$ 组。
+
+\textbf{选组（Select）}：按组内优势绝对值均值降序，选梯度最强的 $N$ 组（$N \times n$ 条）做 GRPO 训练。
+
+推理超生 $S \times n$，训练只用 $N \times n$——超生量提供了淘汰与选组的样本池，但不进梯度更新。以"多推理少训练"提升每步训练信号质量。
+
+\section{差分驱动奖励}
+
+奖励不取自智能体自述，而由外部冻结的大模型裁判依据观察者提供的环境真实状态差分打分，如图~\ref{fig:diff_reward} 所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/fig_fig5_diff_reward_zh.png}
+    \caption{差分驱动奖励（抗奖励作弊）}
+    \label{fig:diff_reward}
+\end{figure}
+
+裁判依据观察者的确定性状态差分（文件系统变更 + 系统状态变更）打分，多维度乘性聚合，安全为二元门控。执行者的自我声明仅作交叉核对——当"声称写入 12345"而差分显示实为 99999 时，矛盾被直接暴露。本轮若无任何环境效果（空差分），直接返回 0 分、不调用裁判。
+
+\section{本章小结}
+
+本章阐述了系统的核心方法：跨步自进化机制使系统自主产生下一轮训练任务，多智能体协作使数据产生自主化，超生-淘汰-选组提升训练信号质量，差分驱动奖励从取证机制上抑制作弊。四者共同构成自进化闭环。

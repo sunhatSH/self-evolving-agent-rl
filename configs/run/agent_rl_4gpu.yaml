@@ -2,44 +2,37 @@
 # 4-GPU debug smoke config — validates the rollout+GRPO train loop, not results.
 # =============================================================================
 #
-# Purpose: smoke-validate the full V1 loop end-to-end on 4×H800 (single node):
-# rollout (recipe_custom RemoteAgentLoopManager + e2b sandbox harness) -> reward
-# (omni -> model_reward_omni -> external LLM judge, grounded on ObserverDiffHook)
-# -> GRPO update. A plumbing check (does it run a few steps without crashing?),
-# NOT a run that produces meaningful metrics.
+# 对齐原 CL 4卡真实配置(r0-25k_9b_16gpu.yaml + train_4gpu.sh override):
+#   新路线 fsdp2 + remove_padding + fused_kernels + flash_attn3 + custom_language_model
+#   SP=4, TP=2, use_dynamic_bsz=true, ppo_max_token_len=32768
+#   CL 4卡日志确认此配置跑通 step 1 (pg_loss=0.006, ppo_kl=-0.0007).
 #
-# This mirrors the PROVEN path in the original repo's b1_9b_16gpu.yaml
-# (verl-native V1 agent_loop: use_v1 + custom_sync + transfer_queue +
-# RemoteAgentLoopManager), scaled from 16 GPU (2 node, SP=4) down to 4 GPU
-# (1 node, SP=1, TP=2). trainer.AgentRLTaskRunnerV1 replicates TaskRunnerV1.run
-# WITHOUT any CL buffer/loss -- stock PPO/GRPO.
+# 我们的新增: 超生+选组(agent_rl_sync trainer). step 内逻辑与 CL 一致(单轮 rollout).
 #
-# Launch (the launcher exports MODEL_PATH + sources sandbox/reward env):
+# Launch:
 #   bash scripts/train_4gpu.sh configs/run/agent_rl_4gpu.yaml
 #   (long runs in tmux: tmux new -d -s smoke 'bash scripts/train_4gpu.sh')
 #
-# Model: small Qwen3.5-9B (NOT the 27B base), via env MODEL_PATH.
+# Model: Qwen3.5-9B via env MODEL_PATH.
 
 defaults:
   - ../_generated_ppo_trainer
   - ../base
 
-# ── model (Qwen3.5-9B, remove_padding + flash_attn3 variable-length packing) ──
+# ── model (Qwen3.5-9B, 新路线: fsdp2 + remove_padding + flash_attn3) ────────
 actor_rollout_ref:
   model:
     path: ${oc.env:MODEL_PATH,/mnt/afs_toolcall/sunhao4/models/Qwen3.5-9B}
-    model_type: custom_language_model   # engine-selection key (EngineRegistry.new):
-                                        #   CustomFSDPEngineWithLMHead (GDN var-len + routed replay).
-                                        #   MUST be top-level, NOT in override_config (see orig debug §31).
-    use_remove_padding: true
-    use_fused_kernels: true
-    enable_gradient_checkpointing: true
+    model_type: custom_language_model   # ★ 顶层(引擎选择键); 放 override_config 会改 HF config → dense_common 崩
+    use_remove_padding: true            # 变长打包: GDN 层走 packed forward, full-attn 走 FA3 varlen
+    use_fused_kernels: true             # fused CE loss 等 kernel(配合 remove_padding)
+    enable_gradient_checkpointing: true # 省激活显存
     fused_kernel_options:
-      impl_backend: triton              # torch backend FusedLinearForPPO chunk bug; triton avoids it
+      impl_backend: triton              # torch backend FusedLinearForPPO chunk bug; triton 绕开
     override_config:
       attn_implementation: flash_attention_3
 
-  # ── training engine: 4 GPU FSDP2, SP=1 → DP=4 ──────────────────────────────
+  # ── training engine: 4 GPU FSDP2, SP=4 → DP=1 ──────────────────────────────
   actor:
     strategy: fsdp2
     use_kl_loss: false
@@ -53,10 +46,10 @@ actor_rollout_ref:
       lr: 2.0e-6
       lr_warmup_steps_ratio: 0.0
       lr_scheduler_type: constant
-    use_dynamic_bsz: true
-    ppo_mini_batch_size: 16             # = train_batch_size (single update/step)
-    ppo_max_token_len_per_gpu: 32768
-    ulysses_sequence_parallel_size: 1   # 4-GPU debug: no sequence parallel (SP=1 → DP=4)
+    use_dynamic_bsz: true               # 变长打包: 按实际 token 数切 micro(配 remove_padding)
+    ppo_mini_batch_size: 16             # = N (选组后训练的 query 数, ×n=8 → 128 条/更新)
+    ppo_max_token_len_per_gpu: 32768    # = max_token_length(131072)/SP(4); 对齐 CL 4卡
+    ulysses_sequence_parallel_size: 4   # SP=4 → 单卡序列切4段; 对齐 CL 4卡(SP=4+TP=2 跑通)
     fsdp_config:
       param_offload: true
       optimizer_offload: true
@@ -67,65 +60,56 @@ actor_rollout_ref:
   rollout:
     name: lightllm
     mode: async
-    tensor_model_parallel_size: 2       # 4 GPUs: 2×TP2 rollout replicas
-    gpu_memory_utilization: 0.6         # conservative on 68G cards (single-node debug)
-    n: 4                                # traj/query (GRPO group). Modest for debug.
+    tensor_model_parallel_size: 2       # TP=2 (对齐 CL 4卡)
+    gpu_memory_utilization: 0.75        # 4卡单机余量足(CL 4卡 override 0.75)
+    n: 8                                # traj/query (GRPO 组大小, 对齐 CL)
     load_format: auto
-    max_model_len: 65536                # Hermes Agent requires >=64K context (else
-                                        #   "context window 32768 below minimum 64000"
-                                        #   -> every rollout empty). prompt+response fit easily.
-    max_num_batched_tokens: 6144
-    enable_chunked_prefill: false
-    calculate_log_probs: true           # rollout returns logprobs -> old_log_prob (PPO clip/ppo_kl live)
+    max_model_len: 131072              # = max_token_length (对齐 CL; 承载能力与卡数无关)
+    max_num_batched_tokens: 6144        # 照搬参考
+    enable_chunked_prefill: false       # lightllm 不读此键(死键)
+    calculate_log_probs: true           # rollout 带回 logprob → old_log_prob (PPO clip/ppo_kl 生效)
     log_prob_micro_batch_size_per_gpu: 1
-    log_prob_max_token_len_per_gpu: 32768
-    response_length: 12288
+    log_prob_max_token_len_per_gpu: 32768  # = max_token_length(131072)/SP(4); 对齐 CL
+    response_length: 65536             # = data.max_response_length (对齐 CL)
     agent:
-      # ★ V1 entry: recipe_custom RemoteAgentLoopManager (sandbox harness path,
-      # proven in the original repo). AgentRLTaskRunnerV1.init_agent_loop_manager
-      # reads this FQN to pick the manager.
       agent_loop_manager_class: recipe_custom.agent.agent_loop_manager.RemoteAgentLoopManager
       agent_loop_config_path: configs/exps/agent_loop_config.yaml
-      default_agent_loop: multi_turn_hermes_agent  # multi-turn: Questioner-driven K=3 follow-ups
+      default_agent_loop: multi_turn_hermes_agent  # single-turn pass-through (multi-turn is cross-step)
     custom:
       remote_agent:
-        gateway_count: 2                # scaled down for 4-GPU single-node debug
+        gateway_count: 4                # 4卡单机: CL 4卡没 override(用 16卡值 8), 我们缩到 4
         num_session_workers: 4
         session_timeout: 2400
         harness_log_dir: ${oc.env:HARNESS_LOG_DIR,logs/harness}
         harness_log_save_mode: all
-        all_failed_policy: skip         # whole-step all-rollout-failed -> skip step, not crash
+        all_failed_policy: skip         # 整 step 全部 rollout 失败 → skip 而非 raise 崩训练
     multi_turn:
       format: qwen3_coder
       reasoning_format: qwen3
-      max_assistant_turns: 6
-      max_tool_response_length: 16384
+      max_assistant_turns: 8            # 对齐 CL r0-25k(8)
+      max_tool_response_length: 16384   # 单次工具输出截断 (对齐 CL)
     checkpoint_engine:
-      update_weights_bucket_megabytes: 3072
+      update_weights_bucket_megabytes: 3072  # 对齐 CL
     engine_kwargs:
       lightllm:
         batch_max_tokens: 6144
         enable_multimodal: false
         enable_torch_memory_saver: true
-        graph_max_batch_size: 32
-        running_max_req_size: 32        # single-replica concurrency cap
-        sampling_backend: flashinfer
+        graph_max_batch_size: 64        # 对齐 CL
+        running_max_req_size: 64        # 对齐 CL
+        sampling_backend: flashinfer       # 对齐 CL
         disable_vision: true
         disable_audio: true
-        disable_symm_mem_allreduce: true  # relies on NCCL_CUMEM_ENABLE=0 (TP rendezvous deadlock guard)
+        disable_symm_mem_allreduce: true   # 关 SymmMem: 与 NCCL_CUMEM_ENABLE=0 冲突致 TP 死锁 (§49)
 
   ref:
     log_prob_micro_batch_size_per_gpu: 1
     fsdp_config:
       param_offload: true
 
-  nccl_timeout: 3600
+  nccl_timeout: 3600                 # 对齐 CL
 
-# ── reward: omni RewardManager (recipe_custom) -> per-row reward_fn -----------
-# The parquet's reward_model.reward_fn = trainer.model_reward_omni.compute_score
-# (written by scripts/add_reward_fn.py); omni imports that FQN -> our LLM judge
-# (trainer/model_reward.py). ObserverDiffHook evidence arrives via
-# extra_info["observer_report"].
+# ── reward: omni RewardManager → per-row reward_fn → 外部裁判(差分驱动) ────────
 reward:
   reward_manager:
     name: omni
@@ -134,57 +118,60 @@ reward:
     rollout:
       name: vllm
 
-# ── data: 16 queries/step (a quarter of the 64-query cluster batch) -----------
+# ── data: 超生+选组 ──────────────────────────────────────────────────────────
+# verl 约束: train_batch_size 必须是 gen_batch_size 的整数倍.
+# 范式: rollout 产 S×n 条(S=超生量), 选组层从 S 组选 N 组训练.
+#   train_batch_size = S (verl 一步处理 S prompt), gen_batch_size = N (抓取块).
+#   4-GPU: N=16, S=32, n=8 → rollout 256 条, 选组后训练 128 条.
 data:
-  train_files: ${oc.env:TRAIN_FILES,/mnt/afs_toolcall/sunhao4/workspace/agentic_cl_research/datasets/train_cl.parquet}
+  train_files: ${oc.env:TRAIN_FILES,/mnt/afs_toolcall/sunhao4/workspace/self-evolving-agent-rl/datasets/smoke_simple.parquet}  # smoke: 64 条最简单任务
   val_files: ${oc.env:VAL_FILES,null}   # offline eval; runner aliases null -> train_files for V1
-  train_batch_size: 16
-  gen_batch_size: 16
-  max_prompt_length: 4096
-  max_response_length: 12288
+  train_batch_size: 32                   # S=2N=32 (超生量)
+  gen_batch_size: 16                     # N=16 (抓取块; 32 是 16 的倍数)
+  max_prompt_length: 8196               # 对齐 CL r0-25k
+  max_response_length: 65536           # 对齐 CL r0-25k (remove_padding 变长打包可扛)
   shuffle: false
   return_raw_chat: true
   filter_overlong_prompts: true
   trust_remote_code: true
-  dataloader_num_workers: 0
+  dataloader_num_workers: 4
   cache_dir: /tmp/verl_rlhf_cache
 
-# ── algorithm: rollout/train policy IS correction -----------------------------
+# ── algorithm: rollout/train policy IS correction ─────────────────────────────
 algorithm:
   adv_estimator: grpo
   rollout_correction:
     rollout_is: token
     rollout_is_threshold: 2.0
 
-# ── trainer: 4 GPU single node, 4-step smoke ----------------------------------
+# ── trainer: 4 GPU single node, 4-step smoke ─────────────────────────────────
 trainer:
   nnodes: 1
   n_gpus_per_node: 4
   total_epochs: 1
-  total_training_steps: 4             # smoke: 4 steps, no real convergence
-  save_freq: 100                      # > total_training_steps so no checkpoint ever triggers
-  test_freq: -1                       # offline eval; no in-loop validation
+  total_training_steps: 4             # smoke: 4 steps
+  save_freq: 100                      # > total_training_steps, 不存 ckpt
+  test_freq: -1                       # 离线评测
   val_before_train: false
   critic_warmup: 0
-  logger: [console]                   # console only for debug
-  log_val_generations: 0
+  logger: [console]
+  log_val_generations: 50             # 对齐 CL
   project_name: self-evolving-agent-rl
   experiment_name: agent_rl_4gpu_debug
   default_local_dir: ${oc.env:CKPT_DIR,ckpts/agent_rl_4gpu_debug}
-  # ── V1: verl-native main_ppo V1 branch + custom_sync trainer ──
   use_v1: true
   v1:
-    trainer_mode: custom_sync
+    trainer_mode: agent_rl_sync      # 自进化 trainer: 超生+淘汰+选组
     sampler:
-      custom_sampler:                 # no replay buffer -- verl built-in sampler
+      custom_sampler:
         path: null
         name: null
 
-# transfer_queue: V1 data channel (KVBatchMeta handles + tq tensors). custom_sync requires it.
+# transfer_queue: V1 数据通道, custom_sync 必须开.
 transfer_queue:
   enable: true
 
 ray_kwargs:
   ray_init:
-    address: auto
+    address: local                      # 单机本地集群 (对齐 CL 4卡)
     num_cpus: null

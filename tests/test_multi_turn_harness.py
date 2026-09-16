@@ -121,7 +121,7 @@ def _restore_super_run(original):
 
 
 def test_full_loop_k3_no_early_stop():
-    """K_FIXED=3, Questioner never returns None early -> exactly 4 hermes calls."""
+    """Single-turn: exactly 1 hermes call (multi-turn is cross-step now)."""
     call_log: list[str] = []
     questioner = MockQuestioner(responses=["follow-up 1", "follow-up 2", "follow-up 3"])
     harness = _make_harness(k_fixed=3, questioner=questioner)
@@ -134,15 +134,12 @@ def test_full_loop_k3_no_early_stop():
     finally:
         _restore_super_run(original)
 
-    assert len(call_log) == 4, f"Expected 4 hermes calls, got {len(call_log)}"
+    assert len(call_log) == 1, f"Expected 1 hermes call (single-turn), got {len(call_log)}"
     assert call_log[0] == "seed query"
-    assert call_log[1] == "follow-up 1"
-    assert call_log[2] == "follow-up 2"
-    assert call_log[3] == "follow-up 3"
 
 
 def test_early_stop_on_satisfied():
-    """Questioner returns None on 2nd call -> only 2 hermes calls."""
+    """Single-turn: exactly 1 hermes call (Questioner not invoked in-session)."""
     call_log: list[str] = []
     questioner = MockQuestioner(responses=["follow-up 1", None])
     harness = _make_harness(k_fixed=3, questioner=questioner)
@@ -155,16 +152,15 @@ def test_early_stop_on_satisfied():
     finally:
         _restore_super_run(original)
 
-    assert len(call_log) == 2, f"Expected 2 hermes calls, got {len(call_log)}"
+    assert len(call_log) == 1, f"Expected 1 hermes call (single-turn), got {len(call_log)}"
     assert call_log[0] == "seed query"
-    assert call_log[1] == "follow-up 1"
 
 
 def test_early_stop_on_error():
-    """Questioner returns None with last_query_was_error=True -> early stop."""
+    """Single-turn: exactly 1 hermes call (Questioner not invoked in-session)."""
     call_log: list[str] = []
     questioner = MockQuestioner(responses=["follow-up 1", None])
-    questioner.last_query_was_error = True  # simulate error on 2nd call
+    questioner.last_query_was_error = True
     harness = _make_harness(k_fixed=3, questioner=questioner)
     sandbox = MockSandbox()
     ctx = MockContext(instruction="seed query")
@@ -175,7 +171,7 @@ def test_early_stop_on_error():
     finally:
         _restore_super_run(original)
 
-    assert len(call_log) == 2, f"Expected 2 hermes calls (error stop), got {len(call_log)}"
+    assert len(call_log) == 1, f"Expected 1 hermes call (single-turn), got {len(call_log)}"
 
 
 def test_instruction_restored_after_loop():

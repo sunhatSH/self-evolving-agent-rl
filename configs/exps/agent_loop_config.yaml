@@ -21,10 +21,10 @@
       domain: ${oc.env:E2B_DOMAIN}
       template: agentic-cl-sandbox             # ★ 你的 e2b 镜像(sandbox_tool.json ToolName)
     sandbox_config:
-      cmd_timeout: 1800            # 1200→1800:HERMES 单命令超时(coding+office 长任务 step36 32 个 1200s 超时丢轨迹)
-      lifetime_timeout: 2100       # 1500→2100:必须 >= cmd_timeout,留 300s 梯度给沙箱清理
-      val_cmd_timeout: 3000        # 评测单命令超时 3000s(用户口径 2026-08-27;仅评测,训练走上方 cmd_timeout)
-      val_lifetime_timeout: 3300   # 必须 >= val_cmd_timeout,留 300s 梯度(同 lifetime/cmd 约束)
+      cmd_timeout: 1800            # 改回原值(减半 900s 致 rollout 大量超时, 只产 4 条轨迹)
+      lifetime_timeout: 2100       # 必须 >= cmd_timeout,留 300s 梯度给沙箱清理
+      val_cmd_timeout: 3000       # 评测单命令超时
+      val_lifetime_timeout: 3300   # 必须 >= val_cmd_timeout
   harness:
     name: hermes
     model_name: verl/model
@@ -61,12 +61,13 @@
       # 父目录并 mkdir -p 一层层建（平均每任务 ~1 个，零污染，不碰 Hermes）。
       - name: trainer.mkdir_deliverable_hook.MkdirDeliverableHook
 
-# ── C. Multi-turn Hermes 沙箱 agent（Questioner 驱动多轮 follow-up）──────────────
-# 继承 HermesHarness，在 harness.run() 里跑 K_FIXED+1 轮 hermes：turn 0 = seed query，
-# turns 1..K = Questioner.next_query(persona, incremental_report, history)。
-# 每轮 hermes 产出 1 条 trajectory，gateway 累积在 session.trajectories 列表。
-# ObserverDiffHook 仍在 session 结束后跑一次（total diff for judge）。
+# ── C. Single-turn Hermes 沙箱 agent（multi-turn 已移至 cross-step 层）──────────
+# 继承 HermesHarness，run() 直接 delegate 到 super().run() 跑一次 hermes。
+# 多轮追问不再在 session 内做（旧 K-turn loop 已移除），改为 cross-step：
+# step t+1 的 seed query 由 Questioner 评估 step t 的 ObserverReport 产出。
+# ObserverDiffHook 在 session 结束后跑一次（total diff for judge）。
 # harness.name 用 FQN（trainer.harness_register 已 patch harness factory 认 FQN）。
+# k_fixed 仍可填（向后兼容），但已忽略（非零会发 DeprecationWarning）。
 - name: multi_turn_hermes_agent
   _target_: recipe_custom.agent.runners.e2b_agent_runners.E2BAgentRunner
   runtime:

@@ -1,0 +1,64 @@
+\chapter{系统实现}
+
+本章描述系统的工程实现，重点为训练基建与训练监控两部分。
+
+\section{训练基建}
+
+自进化系统的持续运转依赖一套完整的训练基础设施。
+
+\subsection{沙箱环境与状态继承}
+
+沙箱环境是自进化闭环的物理基础。系统在代码沙箱中执行 ReAct 工具调用，并在执行前后对沙箱状态各拍一次快照，作差得到确定性状态差分。沙箱后端经统一契约与注册表解耦，本地开发与云端生产可零改切换。
+
+跨步状态继承是自进化的关键：系统将上轮最优轨迹的沙箱文件系统状态保存为快照，恢复到本轮新沙箱，使智能体在上轮产出的文件基础上继续工作。沙箱状态继承机制如图~\ref{fig:sandbox_inherit} 所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/fig_fig6_sandbox_inherit_zh.png}
+    \caption{沙箱状态继承机制}
+    \label{fig:sandbox_inherit}
+\end{figure}
+
+\subsection{推理与训练异步分离}
+
+推理与训练异步分离编排：rollout 阶段推理引擎独占 GPU，训练阶段推理让出；权重更新后异步同步回推理引擎。这一设计使推理与训练互不阻塞，提升系统吞吐。
+
+\subsection{采样与训练的解耦集成}
+
+多智能体协作采样、超生-淘汰-选组、跨步种子生成等环节需在强化学习框架的定长批次约束下无缝衔接。系统通过框架的官方注入点接入自定义采样与选组层，不 fork 框架源码。
+
+\section{训练监控与防坍缩}
+
+自进化系统持续自主运转，无人值守。策略一旦发生模式坍缩或训练崩溃而不被及时检测，将导致后续所有训练步在无效信号上空转。系统在每个训练步的优势计算完成后，实时采集以下坍缩指标并写入训练日志：
+
+\begin{itemize}
+    \item \textbf{奖励标准差}（\texttt{sys/reward\_std}）：组内 reward 的标准差，坍缩至 0 表示策略多样性丧失。
+    \item \textbf{优势标准差}（\texttt{sys/advantage\_std}）：advantage 的标准差，趋近 0 表示组内轨迹得分趋同、无梯度信号。
+    \item \textbf{组内奖励标准差}（\texttt{sys/group\_reward\_std}）：GRPO 组内 reward 的标准差，0 表示退化组（所有轨迹得分相同）。
+    \item \textbf{策略 KL 散度}（\texttt{actor/ppo\_kl}）：策略偏离参考策略的程度，超阈值表示偏离过远。
+    \item \textbf{训练损失}（\texttt{actor/pg\_loss}）：出现 NaN/Inf 表示训练崩溃。
+    \item \textbf{存活组数}（\texttt{sys/num\_groups}）：淘汰后存活组数低于训练组数，表示超生池耗尽。
+\end{itemize}
+
+当任一指标触发阈值时，系统自动终止训练，保证自进化过程的稳定性与可控性。具体终止判据如下：
+
+\begin{itemize}
+    \item 奖励标准差 $< 10^{-6}$：策略多样性坍缩。
+    \item 优势标准差 $< 10^{-6}$：无梯度信号。
+    \item 训练损失为 NaN 或 Inf：训练崩溃。
+    \item 策略 KL 散度 $> 10$：策略偏离过远。
+    \item 存活组数 $<$ 训练组数 $N$：超生池耗尽。
+\end{itemize}
+
+终止触发后，系统跳过跨步种子生成，训练循环在下一步检测到终止标志后退出。训练指标与终止判据如图~\ref{fig:training_curves} 所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/fig_fig9_training_curves_zh.png}
+    \caption{训练指标与终止判据}
+    \label{fig:training_curves}
+\end{figure}
+
+\section{本章小结}
+
+本章描述了系统的工程实现：训练基建（沙箱状态继承、推理训练异步分离、采样训练解耦集成）保证自进化闭环物理运转，训练监控与防坍缩（六指标实时采集、五阈值自动终止）保证自进化过程稳定可控。

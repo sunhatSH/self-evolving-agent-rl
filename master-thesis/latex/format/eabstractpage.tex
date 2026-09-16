@@ -1,0 +1,13 @@
+% English Abstract
+
+\begin{abstracten}
+
+Large language model agents accomplish tasks through multi-step tool use in real environments such as code sandboxes and file systems, where reinforcement learning has become the dominant approach for continuous improvement. However, RL for interactive agents faces a fundamental bottleneck: both training data and trustworthy rewards are difficult to obtain at scale through human effort. Real user data accumulates slowly with narrow coverage; and rewards that rely solely on agent self-reports lead to reward hacking, where the model learns to falsely claim task completion.
+
+This thesis designs and implements a self-evolving RL system for agentic LLMs, whose primary objective is to enable agents to autonomously generate training data, obtain trustworthy rewards, and produce next-step training tasks without human annotation. The system takes self-evolution as its first goal: beyond the initial seed, all subsequent training queries are autonomously generated based on prior execution experience—an observer summarizes the previous step's best trajectory, a questioner generates persona-consistent new seeds, and sandbox file-system state is inherited across steps so that the agent continues building on prior outputs. An oversample-eliminate-select mechanism further ensures that only the gradient-optimal trajectory subset is used for training at each step, improving self-evolution efficiency.
+
+For autonomous data generation, three collaborative agents turn each sampling into a self-driven interaction: an actor solves tasks via ReAct in a sandbox, an observer computes deterministic state diffs, and a questioner generates next-step seeds from prior experience. For reward trustworthiness, a frozen judge scores based on real environment state diffs rather than agent self-reports, suppressing reward hacking at the evidence level.
+
+The system is validated end-to-end on Qwen3.5-9B, with the full self-evolution pipeline operational and sandbox state inheritance verified. Results show that a small number of seed queries can drive complete RL training, and the system operates without external data beyond the initial seed.
+
+\end{abstracten}

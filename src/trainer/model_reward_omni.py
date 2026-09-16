@@ -90,5 +90,9 @@ def compute_score(response: str, ground_truth: str = "", **kwargs: Any) -> dict[
     # 单 row 的 discard 标志已随 result 带回（下面原样返回），组级归并需在 omni
     # RewardManager.__call__ 汇总所有 row 后做，本函数无法独立完成。
     if isinstance(result, dict):
+        # 跨 step 状态继承: 把 workspace 快照从 reward_info 透传进 result → reward_extra_info
+        # → TQ extra_fields → cross_step 取(用于 step t+1 恢复沙箱). judge 不读这个字段.
+        if isinstance(reward_info, dict) and "_workspace_snapshot" in reward_info:
+            result["_workspace_snapshot"] = reward_info["_workspace_snapshot"]
         return result
     return {"score": float(result)}
