@@ -113,3 +113,4 @@ paper/latex/main.pdf
 rewardmodel_choose/results/
 # stray metrics dump dir (wrong output path); real metrics in logs/metrics/
 agentic-cl/
+*copy.doc
