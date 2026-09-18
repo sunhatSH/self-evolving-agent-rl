@@ -57,14 +57,45 @@
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.85\textwidth]{figures/fig_fig9_training_curves_zh.png}
+    \figplaceholder[6cm]{训练指标（奖励/优势标准差、pg\_loss、ppo\_kl）与终止判据触发点（训练产出后以真实日志绘制）}
     \caption{训练指标与终止判据}
     \label{fig:training_curves}
 \end{figure}
 
 \section{系统运行流程}
 
-综合以上模块，系统的完整运行流程为：初始化沙箱后端、推理引擎、训练器与奖励回路；第一步从初始种子采样，后续步用跨步生成的种子；每步内经过 rollout、状态差分取证、奖励打分、淘汰选组、GRPO 更新、训练监控、跨步种子生成；直至终止判据触发或达到步数上限。三智能体的协作时序如图~\ref{fig:sequence} 所示，执行者的沙箱内 ReAct 循环如图~\ref{fig:react_loop} 所示。
+综合以上模块，系统的完整运行流程为：初始化沙箱后端、推理引擎、训练器与奖励回路；第一步从初始种子采样，后续步用跨步生成的种子；每步内经过 rollout、状态差分取证、奖励打分、淘汰选组、GRPO 更新、训练监控、跨步种子生成；直至终止判据触发或达到步数上限。完整流程如算法~\ref{alg:main_loop} 所示。
+
+\begin{algorithm}[htbp]
+\caption{自进化强化学习主循环}
+\label{alg:main_loop}
+\begin{algorithmic}[1]
+\Require 初始种子集 $Q_0$，训练组数 $N$，组大小 $n$，最大步数 $T_{\max}$
+\Ensure 训练后的策略 $\pi_\theta$
+\State 初始化沙箱后端、推理引擎、训练器、奖励回路；$\pi_\theta \gets \pi_{\theta_0}$
+\State $S \gets 2N$；\ 种子集 $Q \gets Q_0$ \Comment{第一步冷启动超采样量}
+\For{$t = 0$ \textbf{to} $T_{\max}-1$}
+    \State $\{\tau_{ij}\} \gets \textproc{Rollout}(\pi_\theta, Q, n)$ \Comment{$S$ 组 $\times\,n$ 条，沙箱内 ReAct}
+    \For{\textbf{each} 轨迹 $\tau_{ij}$}
+        \State $d_{ij} \gets \textproc{Observe}(\tau_{ij})$ \Comment{执行前后状态差分（确定性取证）}
+        \State $r_{ij} \gets \textproc{Judge}(d_{ij})$ \Comment{冻结裁判据差分打分；空差分短路为 0}
+    \EndFor
+    \State $\{\hat{A}_{ij}\} \gets \textproc{ComputeAdvantage}(\{r_{ij}\})$ \Comment{GRPO 组内归一化}
+    \State $m \gets \textproc{CollapseMetrics}(\{r_{ij}\}, \{\hat{A}_{ij}\})$ \Comment{奖励/优势标准差等}
+    \If{$\textproc{ShouldStop}(m)$} \Comment{坍缩或崩溃判据触发}
+        \State \textbf{break}
+    \EndIf
+    \State $\mathcal{R} \gets \textproc{Eliminate}(\{r_{ij}\})$ \Comment{$S \to R$：丢最大 reward 后 20\% 且 $<0.5$ 的组}
+    \State $\mathcal{S} \gets \textproc{Select}(\mathcal{R}, N)$ \Comment{$R \to N$：按 $|\hat{A}|$ 均值选梯度最强 $N$ 组}
+    \State $\pi_\theta \gets \textproc{GRPOUpdate}(\pi_\theta, \mathcal{S})$ \Comment{仅 $N\times n$ 条进梯度}
+    \State $Q \gets \textproc{Questioner}(\textproc{Summary}(\mathcal{R}),\ \textproc{Snapshot}(\mathcal{R}))$ \Comment{跨步：存活组产下一轮种子}
+    \State $S \gets |\mathcal{R}|$ \Comment{下一步超采样量 $S=R$，随淘汰动态收缩}
+\EndFor
+\State \Return $\pi_\theta$
+\end{algorithmic}
+\end{algorithm}
+
+三智能体的协作时序如图~\ref{fig:sequence} 所示，执行者的沙箱内 ReAct 循环如图~\ref{fig:react_loop} 所示。
 
 \begin{figure}[htbp]
     \centering

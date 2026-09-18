@@ -60,11 +60,11 @@
 \section{自进化闭环验证}
 \label{sec:exp_loop}
 
-本节验证自进化闭环是否成立：系统除初始种子外能否持续自主产生训练任务。观测每步的跨步种子生成情况与超采样量 $S$ 的收缩过程。理论上 $S$ 从第一步的 $2N$ 逐步收缩至存活组数 $R$，收缩曲线如图~\ref{fig:s_shrink} 所示。
+本节验证自进化闭环是否成立：系统除初始种子外能否持续自主产生训练任务。评价方法为观测每步的跨步种子生成情况与超采样量 $S$ 的收缩过程：$S$ 从第一步的 $2N$ 起，随每步淘汰逐步收缩至存活组数 $R$，若各步跨步种子生成成功且 $S$ 稳定收缩而不塌缩至零，则闭环成立。收缩曲线如图~\ref{fig:s_shrink} 所示。
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.8\textwidth]{figures/fig_fig10_S_shrink_zh.png}
+    \figplaceholder[6cm]{超采样量 $S$ 随训练步收缩曲线（训练产出后以真实日志绘制）}
     \caption{超采样量 $S$ 随训练步收缩}
     \label{fig:s_shrink}
 \end{figure}
@@ -72,11 +72,11 @@
 \section{自主数据生成效果}
 \label{sec:exp_data}
 
-本节分析多智能体协作产生的训练数据：系统生成任务在总训练数据中的占比，以及随自进化推进任务难度的演化趋势。随着策略变强，提问者生成的任务难度预期逐步上升，任务难度演化如图~\ref{fig:difficulty} 所示。
+本节分析多智能体协作产生的训练数据：评价指标为系统生成任务在总训练数据中的占比，以及随自进化推进任务难度的演化趋势。任务难度以轨迹平均步数、工具调用次数等代理指标度量，观测其随训练步的变化。任务难度演化如图~\ref{fig:difficulty} 所示。
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.8\textwidth]{figures/fig_fig11_difficulty_evolve_zh.png}
+    \figplaceholder[6cm]{任务难度随自进化演化曲线（训练产出后以真实日志绘制）}
     \caption{任务难度随自进化演化}
     \label{fig:difficulty}
 \end{figure}
