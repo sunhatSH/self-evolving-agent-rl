@@ -1,7 +1,116 @@
 % References for the self-evolving agentic RL system thesis.
-% 三大方向: GRPO(算法) / verl(框架) / Agentic 自进化(数据与奖励自主供给)
+% 五大方向: 智能体 / 智能体RL与GRPO / 自进化 / 奖励建模与奖励作弊 / 训练系统
 
-% ── A. GRPO: 策略优化算法 ──────────────────────────────────────────────────────
+% ════ A. 大语言模型智能体 ════════════════════════════════════════════════════
+
+@article{react,
+  author  = {Shunyu Yao and Jeffrey Zhao and Dian Yu and Nan Du and Izhak Shafran and Karthik Narasimhan and Yuan Cao},
+  title   = {ReAct: Synergizing Reasoning and Acting in Language Models},
+  journal = {arXiv preprint arXiv:2210.03629},
+  year    = {2022}
+}
+
+@article{toolformer,
+  author  = {Timo Schick and Jane Dwivedi-Yu and Roberto Dess{\`i} and Roberta Raileanu and Maria Lomeli and Luke Zettlemoyer and Nicola Cancedda and Thomas Scialom},
+  title   = {Toolformer: Language Models Can Teach Themselves to Use Tools},
+  journal = {arXiv preprint arXiv:2302.04761},
+  year    = {2023}
+}
+
+@article{reflexion,
+  author  = {Noah Shinn and Federico Cassano and Edward Berman and Ashwin Gopinath and Karthik Narasimhan and Shunyu Yao},
+  title   = {Reflexion: Language Agents with Verbal Reinforcement Learning},
+  journal = {arXiv preprint arXiv:2303.11366},
+  year    = {2023}
+}
+
+@article{voyager,
+  author  = {Guanzhi Wang and Yuqi Xie and Yunfan Jiang and Ajay Mandlekar and Chaowei Xiao and Yuke Zhu and Linxi Fan and Anima Anandkumar},
+  title   = {Voyager: An Open-Ended Embodied Agent with Large Language Models},
+  journal = {arXiv preprint arXiv:2305.16291},
+  year    = {2023}
+}
+
+@article{codeact,
+  author  = {Xingyao Wang and Yangyi Chen and Lifan Yuan and Yizhe Zhang and Yunzhu Li and Hao Peng and Heng Ji},
+  title   = {Executable Code Actions Elicit Better {LLM} Agents},
+  journal = {arXiv preprint arXiv:2402.01030},
+  year    = {2024}
+}
+
+@article{camel,
+  author  = {Guohao Li and Hasan Abed Al Kader Hammoud and Hani Itani and Dmitrii Khizbullin and Bernard Ghanem},
+  title   = {{CAMEL}: Communicative Agents for ``Mind'' Exploration of Large Language Model Society},
+  journal = {arXiv preprint arXiv:2303.17760},
+  year    = {2023}
+}
+
+% ════ B. 智能体评测环境 ══════════════════════════════════════════════════════
+
+@article{webshop,
+  author  = {Shunyu Yao and Howard Chen and John Yang and Karthik Narasimhan},
+  title   = {WebShop: Towards Scalable Real-World Web Interaction with Grounded Language Agents},
+  journal = {arXiv preprint arXiv:2207.01206},
+  year    = {2022}
+}
+
+@article{webarena,
+  author  = {Shuyan Zhou and Frank F. Xu and Hao Zhu and Xuhui Zhou and Robert Lo and Abishek Sridhar and Xianyi Cheng and Tianyue Ou and Yonatan Bisk and Daniel Fried and Uri Alon and Graham Neubig},
+  title   = {WebArena: A Realistic Web Environment for Building Autonomous Agents},
+  journal = {arXiv preprint arXiv:2307.13854},
+  year    = {2023}
+}
+
+@article{swebench,
+  author  = {Carlos E. Jimenez and John Yang and Alexander Wettig and Shunyu Yao and Kexin Pei and Ofir Press and Karthik Narasimhan},
+  title   = {{SWE-bench}: Can Language Models Resolve Real-World GitHub Issues?},
+  journal = {arXiv preprint arXiv:2310.06770},
+  year    = {2023}
+}
+
+@article{sweagent,
+  author  = {John Yang and Carlos E. Jimenez and Alexander Wettig and Kilian Lieret and Shunyu Yao and Karthik Narasimhan and Ofir Press},
+  title   = {{SWE-agent}: Agent-Computer Interfaces Enable Automated Software Engineering},
+  journal = {arXiv preprint arXiv:2405.15793},
+  year    = {2024}
+}
+
+@article{agentbench,
+  author  = {Xiao Liu and Hao Yu and Hanchen Zhang and Yifan Xu and Xuanyu Lei and Hanyu Lai and Yu Gu and Hangliang Ding and Kaiwen Men and Kejuan Yang and Shudan Zhang and Xiang Deng and Aohan Zeng and Zhengxiao Du and Chenhui Zhang and Sheng Shen and Tianjun Zhang and Yu Su and Huan Sun and Minlie Huang and Yuxiao Dong and Jie Tang},
+  title   = {AgentBench: Evaluating {LLMs} as Agents},
+  journal = {arXiv preprint arXiv:2308.03688},
+  year    = {2023}
+}
+
+@article{agentboard,
+  author  = {Chang Ma and Junlei Zhang and Zhihao Zhu and Cheng Yang and Zhaoliang Yang and Juan ZHANG and Zhenxiang Lin and Jianguo Li and Lingpeng Kong and Jingyi Xu and Zhi Zhang and Lynne P. Baxter and Boris Katz and Chuanyang Jin and Yujia Qin and Yankai Zeng and Songlin Zuo and Chao Chen and Jiang Bian},
+  title   = {AgentBoard: An Analytical Evaluation Board of Multi-turn {LLM} Agents},
+  journal = {arXiv preprint arXiv:2401.13178},
+  year    = {2024}
+}
+
+@article{osworld,
+  author  = {Tianbao Xie and Danyang Zhang and Jixuan Chen and Cheng Li and Siheng Zhao and Ruisheng Cao and Toh Jing Hua and Zhoujun Cheng and Dongyang Liu and Qi Lu and Shihao Liu and Yewei Fang and Xiang Zhao and Qi Sun and Yurren Gan and Zhangchuang Zhao and Ling Yang and Heng Wang and Yu Qiao and Dahua Lin and Chengqi Lv and Jun Chen and Yujia Qin and Tao Gui and Yu Su},
+  title   = {{OSWorld}: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments},
+  journal = {arXiv preprint arXiv:2404.07972},
+  year    = {2024}
+}
+
+@article{theagentcompany,
+  author  = {Frank F. Xu and Yufan Song and Boxuan Li and Yuxuan Tang and Xujie Si and Qian Liu and Kuanning Wang and Menglong Zhou and Zora Zhiruo Wang and Yifei Zhou and Zhiyong Zhou and Jiayi Pan and Ivan Bercovich and Luke Berkeley and Mingzhang Yang and Zhaoyang Yu and Hanyu Lai and Shuyan Zhou and Graham Neubig},
+  title   = {TheAgentCompany: Benchmarking {LLM} Agents on Consequential Real World Tasks},
+  journal = {arXiv preprint arXiv:2412.14161},
+  year    = {2024}
+}
+
+% ════ C. 强化学习与 GRPO ═════════════════════════════════════════════════════
+
+@article{ppo,
+  author  = {John Schulman and Filip Wolski and Prafulla Dhariwal and Alec Radford and Oleg Klimov},
+  title   = {Proximal Policy Optimization Algorithms},
+  journal = {arXiv preprint arXiv:1707.06347},
+  year    = {2017}
+}
 
 @article{grpo,
   author  = {Zhihong Shao and Peiyi Wang and Qihao Zhu and Runxin Xu and Junxiao Song and Xiao Bi and Haowei Zhang and Mingchuan Zhang and Y. K. Li and Y. Wu and Daya Guo},
@@ -12,46 +121,337 @@
 
 @article{grpo_dpo,
   author  = {Yihong Wu and Liheng Ma and Lei Ding and Muzhi Li and Xinyu Wang and Kejia Chen and Zhan Su and Chenyang Huang and Zhanguang Zhang and Derek Li and Yingxue Zhang and Jian-Yun Nie and Mark Coates},
-  title   = {It Takes Two: Your GRPO Is Secretly DPO},
+  title   = {It Takes Two: Your {GRPO} Is Secretly {DPO}},
   journal = {arXiv preprint arXiv:2510.00977},
   year    = {2025}
 }
 
+@article{dr_grpo,
+  author  = {Zichen Liu and Changyu Chen and Wenjun Li and Penghui Qi and Tianyu Pang and Chao Du and Wee Sun Lee and Min Lin},
+  title   = {Understanding {R1-Zero}-Like Training: A Critical Perspective},
+  journal = {arXiv preprint arXiv:2503.20783},
+  year    = {2025}
+}
+
+@article{dapo,
+  author  = {Qiying Yu and Zheng Zhang and Ruofei Zhu and Yufeng Yuan and Xiaochen Zuo and Yu Yue and Tiantian Fan and Gaohong Liu and Lingjun Liu and Xin Liu and Haibin Lin and Zhiqi Lin and Bole Ma and Shuai Han and Ke Fang and Yu Wang and Haitao Wu and Yao Jia and Yanyu Zeng and Yihe Deng and Jiamang Wang and Lin Niu and Sun Hong and Yuxuan Tong and Weilin Liu and Kai Wang and Xiaoyu Tian and Pang Li and Liang Zhao and Guotong Xie and Jie Xin and Jie Tan and Changyi Wan and Yuting Liu and Chongjun Wang and Chengfu Huo and Jun Yu and Ruoyu Zhang and Shuguo Hao and Chao Xu and Yundi Zou and Yanhao Jia and Jiaheng Han and Yiyang Zhang and Yan Li and Shibo Xie and Wenfu Hu and Zhicheng Dou and Hang Zhu and Jiawei Jiang and Zhihao Zhang and Xin Liu and Wenhao Chai and Jingda Qin and Yang Ye and Xiangyuan Xue and Peng Ye and Shenghua Bao and Xiangyu Zhang and Feiyu Xiong and Zhiyuan Liu and Fan Zhang and Zekai Zhu and Juncai Li and Lingjun Zhang and Duomin Wang and Zheng Li and Xin Zhang and Yuting Zhang and Deli Guo and Zhaodong Yan and Zhaopeng Guo and Yihang Xia and Shiwen Cui and Ganqu Cui and Bin Zhang and Xinyi Wan and Shuai Bai and Shuting Pan and Zhibin Wang and Changxing Wei and Junyang Lin},
+  title   = {{DAPO}: An Open-Source {LLM} Reinforcement Learning System at Scale},
+  journal = {arXiv preprint arXiv:2503.14476},
+  year    = {2025}
+}
+
+@article{kimi_k15,
+  author  = {{Kimi Team} and Angang Du and Bofei Gao and Bowei Xing and Chang Liu and Chengyuan Ma and Chengyang Qin and Chenzhuang Du and Duo Cao and Fei Du and Guodong Li and Haoyang Wang and Huimin Ren and Jianyuan Qiu and Jun Song and Junfa Li and Kai Chen and Kekai Fu and Libo Wang and Peiqi Luan and Runji Lin and Shanda Li and Shuang Hong and Tao Tan and Weimin Yao and Xiaoqi Chen and Xingchang Wei and Xinyuan Zhang and Yanhao Li and Yiqing Zhang and Yixiao Lei and Yuchi Xu and Yuxiang Luo and Yushan Pan and Zhaowei Hao and Zhe Jun and Zhen Huang and Zhipeng Xie and Zhiqi Wan and Zijun Zhao},
+  title   = {Kimi k1.5: Scaling Reinforcement Learning with {LLMs}},
+  journal = {arXiv preprint arXiv:2501.12599},
+  year    = {2025}
+}
+
+@article{deepseek_r1,
+  author  = {{DeepSeek-AI} and Daya Guo and Dejian Yang and Haowei Zhang and Junxiao Song and Ruoyu Zhang and Mingxuan Zhang and Q. Y. Zhu and Shirong Ma and Peiyi Wang and Xiao Bi and Guanwei Zhang and Hongzheng Ding and Y. K. Li and Yupeng Li and Yuxin Wu and Z. Z. Ren and Yichao Zhang and Zhipeng Huang and others},
+  title   = {DeepSeek-R1: Incentivizing Reasoning Capability in {LLMs} via Reinforcement Learning},
+  journal = {arXiv preprint arXiv:2501.12948},
+  year    = {2025}
+}
+
 @article{echo_trap,
-  author  = {Zihan Wang and others},
-  title   = {Multi-Turn RL for LLM Agents: The Echo Trap},
+  author  = {Zihan Wang and Kangrui Wang and Qineng Wang and Pingyue Zhang and Linjie Li and Zhengyuan Yang and Kuan Fang and Ying Nian Wu and Yuwei Fu},
+  title   = {RAGEN: Understanding Self-Evolution in {LLM} Agents via Multi-Turn Reinforcement Learning},
   journal = {arXiv preprint arXiv:2504.20073},
   year    = {2025}
 }
 
-% ── B. verl: 强化学习训练框架 ──────────────────────────────────────────────────
-
-@article{verl,
-  author  = {Guangming Sheng and Chi Zhang and Zilingfeng Ye and Xibin Wu and Wang Zhang and Ru Zhang and Yanghua Peng and Haibin Lin and Chuan Wu},
-  title   = {HybridFlow: A Flexible and Efficient RLHF Framework},
-  journal = {arXiv preprint arXiv:2409.19256},
+@article{archer,
+  author  = {Yifei Zhou and Andrea Zanette and Jiayi Pan and Sergey Levine and Aviral Kumar},
+  title   = {ArCHer: Training Language Model Agents via Hierarchical Multi-Turn {RL}},
+  journal = {arXiv preprint arXiv:2402.19446},
   year    = {2024}
 }
 
-% ── C. Agentic 自进化: 数据与奖励的自主供给 ────────────────────────────────────
+@article{gigpo,
+  author  = {Lang Feng and Zhenghai Xue and Tingcong Liu and Bo An},
+  title   = {Group-in-Group Policy Optimization for {LLM} Agent Training},
+  journal = {arXiv preprint arXiv:2505.10978},
+  year    = {2025}
+}
 
-@article{rft_forgetting,
-  author  = {Song Lai and others},
-  title   = {RFT Naturally Mitigates Forgetting in Continual Post-Training},
-  journal = {arXiv preprint arXiv:2507.05386},
-  year    = {2026}
+% ════ D. 智能体强化学习 ══════════════════════════════════════════════════════
+
+@article{uitars,
+  author  = {Yujia Qin and Yining Ye and Junjie Fang and Haoming Wang and Jingxuan Zhou and Yining Ye and Zichen Zhu and Mingjie Zhan and Jiazhen Liu and Yuxiang Wang and others},
+  title   = {{UI-TARS}: Pioneering Automated {GUI} Interaction with Native Agents},
+  journal = {arXiv preprint arXiv:2501.12326},
+  year    = {2025}
+}
+
+@article{glm45,
+  author  = {{GLM-4.5 Team} and Aohan Zeng and Xin Lv and JiaCen Zhang and Yusi Lu and Zhipeng Xiao and Yuxiao Dong and Jie Tang and Minlie Huang},
+  title   = {{GLM-4.5}: Agentic, Reasoning, and Coding ({ARC}) Foundation Models},
+  journal = {arXiv preprint arXiv:2508.06471},
+  year    = {2025}
+}
+
+@article{kimi_k2,
+  author  = {{Kimi Team} and Yifan Bai and Yiping Bao and Zhengda Bian and Jun Gao and Shuaiyi Li and Xiao Wang and Yue Wu and Zhihong Zhang and others},
+  title   = {Kimi K2: Open Agentic Intelligence},
+  journal = {arXiv preprint arXiv:2507.20534},
+  year    = {2025}
+}
+
+@article{tongyi_dr,
+  author  = {{Tongyi DeepResearch Team} and Baixuan Li and Bo Zhang and Dingchu Zhang and Fei Huang and Guangyu Li and Guoxin Chen and Huifeng Yin and others},
+  title   = {Tongyi DeepResearch Technical Report},
+  journal = {arXiv preprint arXiv:2510.24701},
+  year    = {2025}
+}
+
+@article{search_r1,
+  author  = {Bowen Jin and Hansi Zeng and Zhenrui Yue and Jinsung Yoon and Sercan Arik and Dong Wang and Hamed Zamani and Jiawei Han},
+  title   = {Search-R1: Training {LLMs} to Reason and Leverage Search Engines with Reinforcement Learning},
+  journal = {arXiv preprint arXiv:2503.09516},
+  year    = {2025}
+}
+
+@article{swerl,
+  author  = {Yuxiang Wei and Olivier Duchenne and Jade Copet and Quentin Carbonneaux and David Zhang and Gabriel Synnaeve and Yann LeCun and Roberta Raileanu},
+  title   = {{SWE-RL}: Advancing {LLM} Reasoning via Reinforcement Learning on Open Software Evolution},
+  journal = {arXiv preprint arXiv:2502.18449},
+  year    = {2025}
+}
+
+@article{sweet_rl,
+  author  = {Yifei Zhou and Song Jiang and Yuandong Tian and Jason Weston and Roberta Raileanu},
+  title   = {{SWEET-RL}: Training Multi-Turn {LLM} Agents on Collaborative Reasoning Tasks},
+  journal = {arXiv preprint arXiv:2503.15478},
+  year    = {2025}
+}
+
+@article{agentgym_rl,
+  author  = {Zhiheng Xi and Jixuan Huang and Chenyang Liao and Baodai Huang and Honglin Guo and Jiaqi Liu and Rui Zheng and Junjie Ye and Jiazheng Zhang and Xiaotao Gu and others},
+  title   = {AgentGym-RL: Training {LLM} Agents for Long-Horizon Decision Making through Multi-Turn Reinforcement Learning},
+  journal = {arXiv preprint arXiv:2509.08755},
+  year    = {2025}
+}
+
+% ════ E. 自进化与自我提升 ════════════════════════════════════════════════════
+
+@article{self_evolution_survey,
+  author  = {Zhengwei Tao and Ting-En Lin and Xiancai Chen and Hangyu Li and Zhen Liu and Zhiwei Liu and Zhaoyang Wei and Meng Yang and Yaodong Yang and Yuchuan Shang and Ziqi Zhang and Baocai Hou and Jiazheng Zhang and Ruotong Dong and Yujia Wang and Liang Zhao and Mengyue Du and Yupeng Hou and Yifan Wang and Lei Liu and Jian Wang and Rongyu Wang and Wenbo Su and Yuan Qu and Wei Jiao and Yankai Zhang and Duo Zheng and Shunhao Liao and Shimin Li and Bo An and Ming Zhong and Yujiu Yang},
+  title   = {A Survey on Self-Evolution of Large Language Models},
+  journal = {arXiv preprint arXiv:2404.14387},
+  year    = {2024}
+}
+
+@article{self_improve,
+  author  = {Jiaxin Huang and Shixiang Shane Gu and Le Hou and Yu Xia and David Zhou and Minlie Huang},
+  title   = {Large Language Models Can Self-Improve},
+  journal = {arXiv preprint arXiv:2210.11610},
+  year    = {2022}
+}
+
+@article{self_instruct,
+  author  = {Yizhong Wang and Yeganeh Kordi and Swaroop Mishra and Alisa Liu and Noah A. Smith and Daniel Khashabi and Hannaneh Hajishirzi},
+  title   = {Self-Instruct: Aligning Language Models with Self-Generated Instructions},
+  journal = {arXiv preprint arXiv:2212.10560},
+  year    = {2022}
+}
+
+@article{evol_instruct,
+  author  = {Can Xu and Qingfeng Sun and Kai Zheng and Xiubo Geng and Peng Zhao and Jiazhan Feng and Chongyang Tao and Daxin Jiang},
+  title   = {WizardLM: Empowering Large Pre-trained Language Models to Follow Complex Instructions},
+  journal = {arXiv preprint arXiv:2304.12244},
+  year    = {2023}
 }
 
 @article{self_play,
-  author  = {Zixiang Chen and Yihe Deng and Huizhuo Yuan and others},
+  author  = {Zixiang Chen and Yihe Deng and Huizhuo Yuan and Kaixuan Ji and Quanquan Gu},
   title   = {Self-Play Fine-Tuning Converts Weak Language Models to Strong Language Models},
   journal = {arXiv preprint arXiv:2401.01335},
   year    = {2024}
 }
 
+@article{self_rewarding,
+  author  = {Weizhe Yuan and Richard Yuanzhe Pang and Kyunghyun Cho and Xian Li and Sainbayar Sukhbaatar and Jing Xu and Mike Lewis and Jason Weston},
+  title   = {Self-Rewarding Language Models},
+  journal = {arXiv preprint arXiv:2401.10020},
+  year    = {2024}
+}
+
+@article{seal,
+  author  = {Adam Zweiger and Jyothish Pari and Han Guo and Ekin Aky{\"u}rek and Yoon Kim and Pulkit Agrawal},
+  title   = {Self-Adapting Language Models},
+  journal = {arXiv preprint arXiv:2506.10943},
+  year    = {2025}
+}
+
+@article{absolute_zero,
+  author  = {Andrew Zhao and Yiran Wu and Yang Yue and Tongcheng Shen and Wayne Wan and Qichao Zhang and Matthieu Lin and Shenzhi Wang and Huanqin Wu and Jintai Chen and others},
+  title   = {Absolute Zero: Reinforced Self-play Reasoning with Zero Data},
+  journal = {arXiv preprint arXiv:2505.03335},
+  year    = {2025}
+}
+
+@article{r_zero,
+  author  = {Chengsong Huang and Wenhao Yu and Xiaoyang Wang and Hongming Zhang and Zongxia Li and Ruosen Li and Jiaxin Huang and Haitao Mi and Dong Yu},
+  title   = {{R-Zero}: Self-Evolving Reasoning {LLM} from Zero Data},
+  journal = {arXiv preprint arXiv:2508.05004},
+  year    = {2025}
+}
+
+@article{rest,
+  author  = {Caglar Gulcehre and Tom Le Paine and Srivatsan Srinivasan and Ksenia Konyushkova and Lukas Michel and Alexander Rakovski and Mark Saroufim and Ammar Zughbi and Aditya Kasibhatla and others},
+  title   = {Reinforced Self-Training (ReST) for Language Modeling},
+  journal = {arXiv preprint arXiv:2308.08998},
+  year    = {2023}
+}
+
+@article{agentgym,
+  author  = {Zhiheng Xi and Yiwen Ding and Wenxiang Chen and Boyang Hong and Honglin Guo and Junjie Wang and Ding Ding and Shengnan Wang and Xin Guo and Wei Shen and others},
+  title   = {AgentGym: Evolving Large Language Model-based Agents across Diverse Environments},
+  journal = {arXiv preprint arXiv:2406.04151},
+  year    = {2024}
+}
+
+@article{webrl,
+  author  = {Zehan Qi and Xiao Liu and Iat Long Iong and Hanyu Lai and Xueqiao Sun and Yu Yang and Jiadai Sun and Xinyue Zuo and Shenyu Wang and Tianbao Xie and others},
+  title   = {WebRL: Training {LLM} Web Agents via Self-Evolving Online Curriculum Reinforcement Learning},
+  journal = {arXiv preprint arXiv:2411.02337},
+  year    = {2024}
+}
+
+@article{rft_forgetting,
+  author  = {Song Lai and Haohan Zhao and Rong Feng and Changyi Ma and Wenzhuo Liu and Hongbo Zhao and Xi Lin and Qingwen Liu and Xiong Gao and Xiaohua Xu},
+  title   = {Reinforcement Fine-Tuning Naturally Mitigates Forgetting in Continual Post-Training},
+  journal = {arXiv preprint arXiv:2507.05386},
+  year    = {2025}
+}
+
+% ════ F. 奖励建模与奖励作弊 ══════════════════════════════════════════════════
+
 @article{instructgpt,
-  author  = {Long Ouyang and others},
-  title   = {Training language models to follow instructions with human feedback},
+  author  = {Long Ouyang and Jeffrey Wu and Xu Jiang and Diogo Almeida and Carroll Wainwright and Pamela Mishkin and Chong Zhang and Sandhini Agarwal and Katarina Slama and Alex Ray and others},
+  title   = {Training Language Models to Follow Instructions with Human Feedback},
   journal = {arXiv preprint arXiv:2203.02155},
   year    = {2022}
+}
+
+@article{dpo,
+  author  = {Rafael Rafailov and Archit Sharma and Eric Mitchell and Stefano Ermon and Christopher D. Manning and Chelsea Finn},
+  title   = {Direct Preference Optimization: Your Language Model is Secretly a Reward Model},
+  journal = {arXiv preprint arXiv:2305.18290},
+  year    = {2023}
+}
+
+@article{verifier_gsm8k,
+  author  = {Karl Cobbe and Vineet Kosaraju and Mohammad Bavarian and Mark Chen and Heewoo Jun and Lukasz Kaiser and Matthias Plappert and Jerry Tworek and Jacob Hilton and Reiichiro Nakano and Christopher Hesse and John Schulman},
+  title   = {Training Verifiers to Solve Math Word Problems},
+  journal = {arXiv preprint arXiv:2110.14168},
+  year    = {2021}
+}
+
+@article{prm_step_by_step,
+  author  = {Hunter Lightman and Vineet Kosaraju and Yura Burda and Harri Edwards and Bowen Baker and Teddy Lee and Jan Leike and John Schulman and Ilya Sutskever and Karl Cobbe},
+  title   = {Let's Verify Step by Step},
+  journal = {arXiv preprint arXiv:2305.20050},
+  year    = {2023}
+}
+
+@article{rlaif,
+  author  = {Harrison Lee and Samrat Phatale and Hassan Mansoor and Kellie Lu and Thomas Mesnard and Colton Bishop and Victor Carbune and Abhinav Rastogi},
+  title   = {{RLAIF} vs. {RLHF}: Scaling Reinforcement Learning from Human Feedback with {AI} Feedback},
+  journal = {arXiv preprint arXiv:2309.00267},
+  year    = {2023}
+}
+
+@article{llm_judge,
+  author  = {Lianmin Zheng and Wei-Lin Chiang and Ying Sheng and Siyuan Zhuang and Zhanghao Wu and Yonghao Zhuang and Zi Lin and Zhuohan Li and Dacheng Li and Eric P. Xing and Hao Zhang and Joseph E. Gonzalez and Ion Stoica},
+  title   = {Judging {LLM-as-a-Judge} with {MT-Bench} and Chatbot Arena},
+  journal = {arXiv preprint arXiv:2306.05685},
+  year    = {2023}
+}
+
+@article{gen_verifier,
+  author  = {Lunjun Zhang and Arian Hosseini and Hritik Bansal and Mehran Kazemi and Aviral Kumar and Aman Henderson and Eugene Brevdo and Aleksandra Korattikara and Ian Fischer and Hugo Larochelle and Sergey Levine},
+  title   = {Generative Verifiers: Reward Modeling as Next-Token Prediction},
+  journal = {arXiv preprint arXiv:2408.15240},
+  year    = {2024}
+}
+
+@article{reward_hacking_def,
+  author  = {Joar Skalse and Nikolaus H. R. Howe and Dmitrii Krasheninnikov and David Krueger},
+  title   = {Defining and Characterizing Reward Hacking},
+  journal = {arXiv preprint arXiv:2209.13085},
+  year    = {2022}
+}
+
+@article{concrete_problems,
+  author  = {Dario Amodei and Chris Olah and Jacob Steinhardt and Paul Christiano and John Schulman and Dan Man{\'e}},
+  title   = {Concrete Problems in {AI} Safety},
+  journal = {arXiv preprint arXiv:1606.06565},
+  year    = {2016}
+}
+
+@article{reward_overoptimization,
+  author  = {Leo Gao and John Schulman and Jacob Hilton},
+  title   = {Scaling Laws for Reward Model Overoptimization},
+  journal = {arXiv preprint arXiv:2210.10760},
+  year    = {2022}
+}
+
+@article{spurious_rewards,
+  author  = {Rulin Shao and Shuyue Stella Li and Rui Xin and Scott Geng and Yiping Wang and Sewoong Oh and Simon Shaolei Du and Nathan Lambert and Sewon Min and Ranjay Krishna and others},
+  title   = {Spurious Rewards: Rethinking Training Signals in {RLVR}},
+  journal = {arXiv preprint arXiv:2506.10947},
+  year    = {2025}
+}
+
+@article{curiosity,
+  author  = {Deepak Pathak and Pulkit Agrawal and Alexei A. Efros and Trevor Darrell},
+  title   = {Curiosity-driven Exploration by Self-supervised Prediction},
+  journal = {arXiv preprint arXiv:1705.05363},
+  year    = {2017}
+}
+
+% ════ G. 训练系统与框架 ══════════════════════════════════════════════════════
+
+@article{verl,
+  author  = {Guangming Sheng and Chi Zhang and Zilingfeng Ye and Xibin Wu and Wang Zhang and Ru Zhang and Yanghua Peng and Haibin Lin and Chuan Wu},
+  title   = {HybridFlow: A Flexible and Efficient {RLHF} Framework},
+  journal = {arXiv preprint arXiv:2409.19256},
+  year    = {2024}
+}
+
+@article{vllm,
+  author  = {Woosuk Kwon and Zhuohan Li and Siyuan Zhuang and Ying Sheng and Lianmin Zheng and Cody Hao Yu and Joseph E. Gonzalez and Hao Zhang and Ion Stoica},
+  title   = {Efficient Memory Management for Large Language Model Serving with {PagedAttention}},
+  journal = {arXiv preprint arXiv:2309.06180},
+  year    = {2023}
+}
+
+@article{openrlhf,
+  author  = {Jian Hu and Xibin Wu and Wei Shen and Xiaoqian Chao and Zhilin Liu and Weixun Wang and Zhiqiang Xie and Jeff Xu and Rui Zheng and Yiran Zhong and others},
+  title   = {OpenRLHF: An Easy-to-use, Scalable and High-performance {RLHF} Framework},
+  journal = {arXiv preprint arXiv:2405.11143},
+  year    = {2024}
+}
+
+@article{areal,
+  author  = {Wei Fu and Jiaxuan Gao and Xujie Shen and Liwei Lu and Jiahang Zhang and Yuchuan Wu and Zhiyu Xue and Zhanqiu Hu},
+  title   = {AReaL: A Large-Scale Asynchronous Reinforcement Learning System for Language Reasoning},
+  journal = {arXiv preprint arXiv:2505.24298},
+  year    = {2025}
+}
+
+@article{agent_lightning,
+  author  = {Xufang Luo and Yuge Zhang and Zhiyuan He and Jiacheng You and Chujie Zheng and Su Lu and Weixun Wang and Tianpei Zhang and Yu Wang and Xinyi Chen and others},
+  title   = {Agent Lightning: Train {ANY} {AI} Agents with Reinforcement Learning},
+  journal = {arXiv preprint arXiv:2508.03680},
+  year    = {2025}
+}
+
+@article{qwen3,
+  author  = {An Yang and Anfeng Li and Baosong Yang and Beichen Zhang and Binyuan Hui and Bo Zheng and Chang Gao and Chengpeng Li and Dayiheng Liu and Fei Huang and others},
+  title   = {Qwen3 Technical Report},
+  journal = {arXiv preprint arXiv:2505.09388},
+  year    = {2025}
 }

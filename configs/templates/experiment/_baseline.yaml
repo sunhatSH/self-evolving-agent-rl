@@ -6,7 +6,7 @@
 defaults:
   - ../../_generated_ppo_trainer          # verl 全量默认
   - ../../base                            # ① 逻辑层
-  - ../hardware/16GPU_9BQwen3.5           # ② 压力层(换规格改这一行:32GPU_9BQwen3.5 / 64GPU_27BQwen3.6)
+  - ../hardware/16GPU_9BQwen3.5           # ② 压力层(换规格改这一行:32GPU_9BQwen3.5)
 
 # ── baseline 语义 ────────────────────────────────────────────────────────────
 actor_rollout_ref:

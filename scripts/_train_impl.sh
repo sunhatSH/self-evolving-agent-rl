@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # ── 默认值 ──────────────────────────────────────────────────────────────
-CONFIG="$ROOT_DIR/configs/run/b1_9b_16gpu.yaml"
+CONFIG="$ROOT_DIR/configs/run/agent_rl_16gpu.yaml"
 NNODES=1
 GPUS_PER_NODE=8
 ROLLOUT_TP=""

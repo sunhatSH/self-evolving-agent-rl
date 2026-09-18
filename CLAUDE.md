@@ -124,7 +124,7 @@ self-evolving-agent-rl/
 
 | 类别 | 位置 | 说明 |
 |------|------|------|
-| **基座模型** | 仓库外，绝对路径 | configs 默认 **Qwen3.6-27B**（`configs/base.yaml`）。4 卡 debug config 用小模型 **Qwen3.5-9B**（env `MODEL_PATH`）。 |
+| **基座模型** | 仓库外，绝对路径 | configs 默认 **Qwen3.5-9B**（`configs/base.yaml`），4 卡 debug 与 16 卡正式均用 9B。 |
 | **训练 checkpoint** | `ckpts/<实验名>-step-<N>/` | trainer 写入（4 卡 debug 的 `save_freq` 大于总步数故不产）。 |
 
 所有运行时产物在 `.gitignore`，不提交 git。

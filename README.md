@@ -51,7 +51,7 @@ tmux attach -t smoke
 /opt/conda/bin/python3 -m trainer.agent_rl_main --config configs/run/agent_rl_4gpu.yaml
 ```
 
-- **基座模型**：configs 默认 Qwen3.6-27B（`configs/base.yaml`）；4 卡 debug config 用小模型 Qwen3.5-9B（经 env `MODEL_PATH` 指定）。
+- **基座模型**：Qwen3.5-9B（`configs/base.yaml` 默认），4 卡 debug 与 16 卡正式均用 9B。
 - **沙箱后端**：`local`（本机，debug 默认，无凭证）或 `e2b`（腾讯云，需凭证）。见 `doc/ops/sandbox/`。
 
 ## 仓库结构

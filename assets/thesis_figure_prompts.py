@@ -89,16 +89,22 @@ FIGURES = [
     },
     {
         "key": "fig3_oversample_select",
-        "title": "图3 超生-淘汰-选组机制",
+        "title": "图3 超采样-淘汰-选组机制",
         "prompt": (
-            "A funnel-style flow diagram showing three stages of sample selection in RL "
-            "training. Stage 1 OVERSAMPLE: S=32 query groups, each producing 8 trajectories "
-            "(show as 32 small blue bars). Stage 2 ELIMINATE: drop groups whose best reward "
-            "is BOTH in bottom 20% AND below 0.3 threshold, leaving R=30 groups (show some "
-            "bars grayed out and dropped). Stage 3 SELECT: from R groups pick the N=16 with "
-            "strongest gradient (advantage), shown in bright green, for GRPO training. "
-            "Include a small side note: 'S shrinks each step: 32 -> 30 -> 27 -> 26'. "
-            "Left-to-right funnel narrowing. English labels. " + _STYLE
+            "A clean funnel-style flow diagram with three stages of group selection in RL "
+            "training. NO legend row, NO agent icons, NO role labels, NO color key at the "
+            "bottom whatsoever — the diagram ends after the third stage box. "
+            "Stage 1 OVERSAMPLE: a large dashed-border panel labelled 'S = 32 groups "
+            "(each with 8 trajectories)' containing 32 small blue bars arranged in a grid. "
+            "Stage 2 ELIMINATE: a medium panel labelled 'R = 30 groups' with a caption "
+            "'drop groups where MAX reward is BOTH in bottom 20% AND < 0.5'. Show 2 bars "
+            "grayed-out and crossed out. Stage 3 SELECT: a smaller bright-green panel "
+            "labelled 'N = 16 groups' with caption 'pick N groups with highest |advantage| "
+            "mean for GRPO training'. A small annotation to the right: "
+            "'S shrinks each step: 32 → 30 → 27 → 26'. "
+            "Left-to-right funnel with gray arrows between stages. White background. "
+            "Flat academic style, no photorealism, no decorative elements, no footer, "
+            "no legend strip. " + _STYLE
         ),
     },
     {

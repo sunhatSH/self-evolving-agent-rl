@@ -17,13 +17,13 @@
 # config for actor, rollout and reference model (verl: actor_rollout_ref)
 actor_rollout_ref:
 
-  # Base model -- Qwen3.6-27B (https://huggingface.co/Qwen/Qwen3.6-27B).
-  # Override `path` to a local cache (e.g. /mnt/afs/models/qwen3.6-27b/).
+  # Base model -- Qwen3.5-9B (local weights).
+  # Override `path` to a local cache (e.g. /mnt/afs_toolcall/sunhao4/models/Qwen3.5-9B).
   #
-  # ★ 训练起点 = π₀（初始 Qwen3.6-27B）。
+  # ★ 训练起点 = π₀（初始 Qwen3.5-9B）。
   #   注意区分：model.path = 训练起点；ref.path = KL 锚点 π_ref。
   model:
-    path: /mnt/afs_agents/share_models/Qwen/Qwen3.6-27B   # π₀ 本地权重(非 HF 名);cluster 覆盖为 /tmp/qwen36
+    path: /mnt/afs_toolcall/sunhao4/models/Qwen3.5-9B   # π₀ 本地权重; 4gpu/16gpu config 均可再 override
 
   # Rollout (generation) config
   rollout:

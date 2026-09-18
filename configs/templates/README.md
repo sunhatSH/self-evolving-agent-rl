@@ -27,7 +27,7 @@ defaults:
 ```
 
 **换维度只换一行**:
-- 换 GPU/模型:`16GPU_9BQwen3.5` → `64GPU_27BQwen3.6`,其余不动。
+- 换 GPU/模型:`16GPU_9BQwen3.5` → `32GPU_9BQwen3.5`,其余不动。
 - 换实验:复制实验骨架改 `cl.*` / `experiment_name`,硬件层不动。
 
 ---
@@ -40,7 +40,7 @@ templates/
 ├── hardware/
 │   ├── 16GPU_9BQwen3.5.yaml           # 当前生产规格(实测压测值)
 │   ├── 32GPU_9BQwen3.5.yaml           # 推断起点,待压测
-│   └── 64GPU_27BQwen3.6.yaml          # 27B 生产规格,待压测
+│   └── (64GPU 模板已删:正式实验统一 9B)
 └── experiment/
     ├── _baseline.yaml                 # B1 语义骨架(无 CL)
     ├── _kl.yaml                       # K* 语义骨架(开 KL)

@@ -18,7 +18,7 @@ actor_rollout_ref:
     ppo_mini_batch_size: 64
     ppo_micro_batch_size_per_gpu: 1       # micro=2 时 update_actor OOM;降 1 减半激活峰值
     ppo_max_token_len_per_gpu: 32768      # 压激活
-    optim:                                # lr 按模型 size 定(9B:2e-6;27B 更低)
+    optim:                                # lr 按模型 size 定(9B:2e-6)
       lr: 2.0e-6
       lr_warmup_steps_ratio: 0.03
       lr_scheduler_type: constant

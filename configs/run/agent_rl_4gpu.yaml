@@ -61,7 +61,7 @@ actor_rollout_ref:
     name: lightllm
     mode: async
     tensor_model_parallel_size: 2       # TP=2 (对齐 CL 4卡)
-    gpu_memory_utilization: 0.75        # 4卡单机余量足(CL 4卡 override 0.75)
+    gpu_memory_utilization: 0.75        # 4卡单机余量足(对齐 CL 4卡)
     n: 8                                # traj/query (GRPO 组大小, 对齐 CL)
     load_format: auto
     max_model_len: 131072              # = max_token_length (对齐 CL; 承载能力与卡数无关)

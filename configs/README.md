@@ -8,7 +8,7 @@ and a file's own body overrides its `defaults`.
 ## Layers
 
 ```
-base.yaml                 # shared defaults: model (Qwen3.6-27B base), rollout,
+base.yaml                 # shared defaults: model (Qwen3.5-9B base), rollout,
                           #   reward = external LLM judge, algorithm = GRPO, and the
                           #   custom `agent_rl.rollout` section (sessions_per_step)
 cluster.yaml              # cluster engine overlay (lightllm/FSDP/Ray, 64-GPU scale,
@@ -28,8 +28,7 @@ The `agent_rl:` top-level section is our own custom rollout config, read only by
 | `base.yaml` | Shared defaults, not run directly. |
 | `cluster.yaml` | 64-GPU cluster engine overlay. |
 | `run/agent_rl_4gpu.yaml` | 4-GPU debug smoke config (inherits `base.yaml`). See `run/README.md`. |
-| `debug_8b.yaml` | Single-node 8-GPU debug (9B model). |
-| `production_27b.yaml` | 27B production overlay. |
+| `run/agent_rl_16gpu.yaml` | 16-GPU (2-node) formal training config (Qwen3.5-9B). |
 | `agents.yaml` | Multi-agent (observer / questioner / judge) settings. |
 | `exps/` | verl agent-loop + hermes config (credentials via `${oc.env}`). |
 | `templates/` | Reference layered-config templates (hardware × experiment); not wired into the launch scripts. |
@@ -37,8 +36,9 @@ The `agent_rl:` top-level section is our own custom rollout config, read only by
 
 ## Model paths
 
-- Base model in `base.yaml` = Qwen3.6-27B (override `actor_rollout_ref.model.path`).
-- The 4-GPU debug config uses a small model (Qwen3.5-9B) via `${oc.env:MODEL_PATH,...}`.
+- Base model in `base.yaml` = Qwen3.5-9B (`/mnt/afs_toolcall/sunhao4/models/Qwen3.5-9B`,
+  override `actor_rollout_ref.model.path` or env `MODEL_PATH`). Both the 4-GPU
+  debug config and the 16-GPU formal config use the 9B model.
 - Data paths use `${oc.env:TRAIN_FILES,...}` / `${oc.env:VAL_FILES,...}`; the launch
   script exports them.
 
@@ -46,7 +46,10 @@ The `agent_rl:` top-level section is our own custom rollout config, read only by
 
 ```bash
 # 4-GPU debug smoke
-bash scripts/train.sh 4gpu --config configs/run/agent_rl_4gpu.yaml
+bash scripts/train_4gpu.sh configs/run/agent_rl_4gpu.yaml
+
+# 16-GPU formal training (in tmux)
+tmux new -d -s train 'bash scripts/train_16gpu.sh configs/run/agent_rl_16gpu.yaml'
 
 # entry point also callable directly
 python -m trainer.agent_rl_main --config configs/run/agent_rl_4gpu.yaml

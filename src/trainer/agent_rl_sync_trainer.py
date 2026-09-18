@@ -162,7 +162,7 @@ def select_groups(
     n_select: int,
     group_size: int = 8,
     drop_bottom_pct: float = 0.2,
-    drop_below: float = 0.3,
+    drop_below: float = 0.5,
 ) -> tuple[KVBatchMeta, list[str]]:
     """选组层: 淘汰(S→R) + 选组(R→N). 返回 (训练子集, 存活组 uids R).
 
@@ -406,7 +406,7 @@ if CustomPPOTrainerSync is not None:
                     n_select=n_select,
                     group_size=group_size,
                     drop_bottom_pct=0.2,
-                    drop_below=0.3,
+                    drop_below=0.5,
                 )
             self._survived_uids = survived_uids  # R 组: 下一轮追问对象
 
