@@ -129,6 +129,13 @@ def _reward_key(rows: list[dict]) -> str:
     return "critic/rewards/mean"
 
 
+def _std_key(rows):
+    for k in ("sys/reward_std", "cl/reward_std"):
+        if any(k in r for r in rows):
+            return k
+    return "sys/reward_std"
+
+
 # ── 绘图 ─────────────────────────────────────────────────────────────────────
 def plot_fig9(rows, out):
     """训练指标 2x2 + 终止判据。"""
@@ -136,7 +143,7 @@ def plot_fig9(rows, out):
     rk = _reward_key(rows)
     panels = [
         (axes[0, 0], rk, L("奖励均值", "reward mean"), "#2E7D32"),
-        (axes[0, 1], "sys/reward_std", L("奖励标准差", "reward std"), "#1565C0"),
+        (axes[0, 1], _std_key(rows), L("奖励标准差（方差坍缩）", "reward std (collapse)"), "#1565C0"),
         (axes[1, 0], "actor/pg_loss", L("策略损失 pg_loss", "pg_loss"), "#C62828"),
         (axes[1, 1], "actor/ppo_kl", L("策略 KL 散度 ppo_kl", "ppo_kl"), "#6A1B9A"),
     ]
@@ -212,21 +219,43 @@ def plot_fig11(rows, out):
     print(f"saved {out}")
 
 
+def load_jsonl(path: str) -> list[dict]:
+    """读 metrics.jsonl（每行 {step, data:{...}}）→ 扁平 rows，键名与 console 解析一致。"""
+    import json
+    rows = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            d = json.loads(line)
+            r = {"step": d.get("step")}
+            r.update(d.get("data", {}))
+            # 别名: S 收缩优先用 sys/num_groups_survived, 退回 sys/num_groups
+            if "sys/num_groups_survived" in r:
+                r["S"] = r["sys/num_groups_survived"]
+            rows.append(r)
+    return rows
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("log", help="训练 console 日志路径")
+    ap.add_argument("log", help="训练 console 日志 或 metrics.jsonl")
     ap.add_argument("--out", default="master-thesis/figures", help="图输出目录")
     args = ap.parse_args()
 
     if not os.path.isfile(args.log):
         sys.exit(f"log not found: {args.log}")
-    rows = parse_log(args.log)
+    if args.log.endswith(".jsonl"):
+        rows = load_jsonl(args.log)
+    else:
+        rows = parse_log(args.log)
     n = sum(1 for r in rows if r.get("step") is not None)
     print(f"parsed {len(rows)} metric blocks, {n} with step index"
           f" (zh font: {_ZH or 'NONE → English labels'})")
     if n == 0:
         print("WARNING: 未解析到任何带 step 的指标块; 图将标注'无数据'。"
-              "确认日志是训练 console 输出(含 training/global_step 行)。")
+              "确认日志是训练 console 输出(含 training/global_step 行)或 metrics.jsonl。")
 
     os.makedirs(args.out, exist_ok=True)
     plot_fig9(rows, os.path.join(args.out, "fig_fig9_training_curves_zh.png"))
