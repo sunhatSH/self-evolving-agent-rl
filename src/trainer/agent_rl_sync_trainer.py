@@ -251,6 +251,13 @@ if CustomPPOTrainerSync is not None:
             super().__init__(config)
             self._cross_step_seeds: list = []  # 跨 step seeds(Questioner 产的新 query)
             self._should_stop: bool = False  # 训练终止标志(坍缩/崩溃触发)
+            # 失败案例自演化控制器（对应论文第 4.6 节）
+            try:
+                from agents.badcase_evolve import BadcaseEvolver
+                self._badcase_evolver = BadcaseEvolver()
+            except Exception as _exc:  # noqa: BLE001
+                self._badcase_evolver = None
+                print(f"[badcase-evolve] evolver unavailable (off-cluster?): {_exc}", flush=True)
 
         def _check_collapse(self, metrics: dict) -> None:
             """检测训练坍缩/崩溃, 触发则设 _should_stop=True.
@@ -471,7 +478,43 @@ if CustomPPOTrainerSync is not None:
                 print(f"[cross-step] seed generation failed: {exc}", flush=True)
                 self._cross_step_seeds = []
 
+            # ★ 失败案例自演化: 收集本步失败轨迹, 每 10 步或攒够 20 例触发一次演化 ★
+            # (对应论文第 4.6 节; 参数为演示可运行性而设, 非最优)
+            if self._badcase_evolver is not None:
+                try:
+                    self._collect_and_evolve_badcases(full_batch_keys, full_partition, group_size)
+                except Exception as exc:  # noqa: BLE001 -- best-effort, 不阻塞训练
+                    print(f"[badcase-evolve] step {self.global_steps} skipped: {exc}", flush=True)
+
             return batch
+
+        def _collect_and_evolve_badcases(self, batch_keys, partition_id, group_size):
+            """从 TQ 读本步每组最优轨迹的取证信息, 收集失败案例并按需触发演化.
+
+            复用 cross_step 的 _extract_best_per_group 取每组 (reward, trajectory,
+            observer_report, extra_info), 对失败者调 evolver.collect; 步末判断触发.
+            """
+            from agents.cross_step import _extract_best_per_group
+            best = _extract_best_per_group(batch_keys, partition_id, group_size)
+            for item in best:
+                ei = item.get("extra_info") or {}
+                reward_info = {
+                    "agent_error": ei.get("agent_error"),
+                    "state_diff": ei.get("state_diff"),
+                    "deliverable_count": ei.get("deliverable_count", 0),
+                    "hermes_log": ei.get("hermes_log"),
+                }
+                self._badcase_evolver.collect(
+                    step=self.global_steps,
+                    uid=str(item.get("uid", "")),
+                    trajectory_text=str(item.get("trajectory_text", "")),
+                    observer_report=str(item.get("observer_report", "")),
+                    reward=float(item.get("reward", 0.0)),
+                    reward_info=reward_info,
+                    raw_prompt=str(item.get("raw_prompt", "")),
+                )
+            if self._badcase_evolver.should_trigger(self.global_steps):
+                self._badcase_evolver.evolve(global_step=self.global_steps)
 
 else:  # off-cluster: 占位, import 不报错
     class AgentRLSyncTrainer:  # type: ignore[no-redef]

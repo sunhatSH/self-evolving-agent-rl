@@ -24,18 +24,18 @@ FIGURES = [
         "prompt": (
             "一张自进化强化学习系统的端到端流程图, 从左到右分阶段排列, 用大箭头连接. "
             "所有文字标签必须是简体中文, 字体清晰规整. "
-            "阶段1「种子(输入)」: 超生规模 S 从这里进入. 两个入口箭头: 左侧小箭头标注"
+            "阶段1「种子(输入)」: 超采样规模 S 从这里进入. 两个入口箭头: 左侧小箭头标注"
             "『仅第1步: S=2N(简单初始任务)』, 下方大曲线箭头标注『第2步起: S=R(上一步存活组)』. "
-            "要清楚表达 S=2N 只是第一步冷启动, 从第2步起 S=R. "
             "阶段2「采样(Rollout)」: S 个查询每个生成 8 条轨迹, 在沙箱里由蓝色 Actor 跑 ReAct, "
             "产生 S×8 条轨迹和沙箱状态. "
             "阶段3「观察(Observer)」: 绿色 Observer 计算确定性的前后状态差分(不用大模型). "
             "阶段4「奖励(Reward)」: 紫色冻结大模型裁判, 基于差分给每条轨迹打分(差分驱动, 抗奖励作弊). "
-            "阶段5「淘汰(Eliminate)」: 丢弃最优奖励同时满足『后20%且低于0.3』的组, 剩下 R 组(至少保留80%). "
+            "阶段5「淘汰(Eliminate)」: 丢弃最优奖励同时满足『后20%且低于0.5』的组, 剩下 R 组(至少保留80%). "
             "阶段6「选组(Select)」: 计算优势, 选梯度最强的 N 组(N×8)做 GRPO 更新 Actor 策略. "
-            "底部一条大曲线反馈箭头, 标题『跨步自进化』, 从 R 组回流到阶段1作为下一步输入: "
-            "对每个存活组, 恢复其沙箱文件状态(状态继承), 绿色 Observer 写执行概括, "
-            "橙色 Questioner 生成下一步的种子查询. 回流输出标注『S=R(回到阶段1)』. "
+            "底部一条大曲线反馈箭头, 标题『跨步自进化』, 从 R 组回流到阶段1: "
+            "恢复沙箱文件状态(状态继承), Observer 写执行概括, Questioner 生成下一步种子. "
+            "右下角增加一个青色方框『失败案例自演化』: 收集失败/异常轨迹 → 大模型归因(模型问题 or 基建问题) "
+            "→ 分别热更新提示词 / 动态扩展基建. 每10步或20例触发一次, 用虚线箭头接回阶段1和奖励裁判. "
             "最右侧一个小监视器框『训练崩溃即停止: 奖励标准差→0, 优势方差→0, pg_loss出现NaN, ppo_kl爆炸』. "
             "阶段编号1-6, 中文标签, 每个 Agent 用不同颜色的框. " + _STYLE
         ),
@@ -84,7 +84,12 @@ FIGURES = [
             "(purple, external LLM) scores trajectories grounded on the Observer's diff. "
             "A GRPO Trainer box updates the Actor policy. Arrows show: Actor executes in "
             "sandbox, Observer captures diff, Judge scores, Trainer updates Actor, Questioner "
-            "feeds new tasks back. Label each component clearly in English. " + _STYLE
+            "feeds new tasks back. ADD a Failure-Case Self-Evolution module (teal rounded box, "
+            "bottom): it collects failed/anomalous trajectories, an LLM attributes each to "
+            "either a MODEL issue (dashed arrow updates the Judge/Questioner/Actor prompts) "
+            "or an INFRA issue (dashed arrow expands the Sandbox tools/deps). Label it "
+            "'Failure-Case Self-Evolution (evolves evaluator & infra)'. Label each component "
+            "clearly in English. " + _STYLE
         ),
     },
     {
