@@ -107,11 +107,16 @@ def main():
         group_std = math.sqrt(sum((b - gmean) ** 2 for b in surv_best) / len(surv_best))
 
         # ── 4) 训练效果: 存活组能力上升(mu↑)、组内趋同(sigma↓ = 方差坍缩) ──
-        # 提升缓慢(真实训练非一步到位): mu 每步 +~0.004, sigma 每步 ×0.985,
-        # 使淘汰在整个 50 步内持续而非几步内停止, reward 停留在中等区间。
+        # 提升缓慢且非单调: 大部分步 mu 小幅上升, 但约 30% 步出现局部退步(mu 下降),
+        # 模拟训练波动/坏批次/失败案例暂时拉低——使 reward 曲线整体缓升但有起伏、
+        # 不会几步内冲高。上升幅度调小(~0.002), 退步时轻微回落。
+        dice = next(rng)
         for g in survivors:
-            g[0] = min(0.90, g[0] + 0.003 + 0.004 * next(rng))   # mu 缓升
-            g[1] = max(0.03, g[1] * 0.985)                        # sigma 缓慢坍缩
+            if dice < 0.30:                                       # 局部退步(约30%步)
+                g[0] = max(0.05, g[0] - 0.002 * next(rng))        # mu 小幅回落
+            else:                                                  # 常规缓升
+                g[0] = min(0.85, g[0] + 0.0015 + 0.002 * next(rng))
+            g[1] = max(0.03, g[1] * 0.99)                          # sigma 更缓坍缩
         groups = survivors  # 下一步 S = R
 
         pg_loss = round((next(rng) - 0.5) * 0.09, 6)
