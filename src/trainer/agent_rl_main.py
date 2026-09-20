@@ -68,7 +68,13 @@ def _apply_overrides(cfg, overrides: list[str]):
 
 
 def load_config(config_path: str):
-    """Resolve OmegaConf inheritance (``defaults: [../base]``)."""
+    """Resolve OmegaConf inheritance (``defaults: [../base]``).
+
+    Recurses into a base that itself declares ``defaults`` (e.g. a run config that
+    inherits another run config), so nested inheritance resolves fully. The
+    ``defaults`` key is always stripped from the returned config so verl never
+    sees an unknown top-level key.
+    """
     cfg_path = Path(config_path).resolve()
     cfg = OmegaConf.load(cfg_path)
 
@@ -77,14 +83,16 @@ def load_config(config_path: str):
         merged = OmegaConf.create({})
         for entry in defaults:
             ref = str(entry).strip()
-            if ref.startswith("../"):
+            if ref.startswith("/"):
+                base_path = Path(f"{ref}.yaml") if not ref.endswith(".yaml") else Path(ref)
+            else:  # both "../x" and "x" resolve relative to this file's dir
                 base_path = (cfg_path.parent / f"{ref}.yaml").resolve()
-            elif ref.startswith("/"):
-                base_path = Path(ref)
-            else:
-                base_path = (cfg_path.parent / f"{ref}.yaml").resolve()
-            merged = OmegaConf.merge(merged, OmegaConf.load(base_path))
+            # Recurse so a base with its own `defaults` resolves fully.
+            base_cfg = load_config(str(base_path))
+            merged = OmegaConf.merge(merged, base_cfg)
         cfg = OmegaConf.merge(merged, cfg)
+
+    cfg.pop("defaults", None)  # never leak `defaults` into verl
 
     # If CKPT_DIR is set (train.sh), write checkpoints there.
     ckpt_dir = os.environ.get("CKPT_DIR")

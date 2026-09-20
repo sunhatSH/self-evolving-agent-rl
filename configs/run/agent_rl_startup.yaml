@@ -1,0 +1,30 @@
+# =============================================================================
+# 16-GPU 启动实验配置——纯自进化验证（128 条冷启动种子，无补齐兜底）
+# =============================================================================
+#
+# 目的：验证自进化闭环能自我维持。仅用 128 条（=S=2N）初始种子做 step 1 冷启动，
+# step 2 起种子全部由 Questioner 从上一步存活组自主生成——数据获取基于交互生成，
+# 模型在沙箱交互与多智能体协作中动态产生新经验与数据，不再从外部数据集补齐。
+# 这比用大数据池（agent_rl_16gpu.yaml 的 3200 条）更能证明"数据自主产生"这一目标：
+# 若跨步种子长期充足（存活组 R≥N），系统即在无外部数据兜底下持续自进化运转。
+#
+# 继承 agent_rl_16gpu.yaml 的全部引擎/采样/奖励设置，仅覆盖数据集与步数。
+# 注意：load_config 只解析一层 defaults，故此处平铺三层基座（顺序须与
+# agent_rl_16gpu.yaml 一致：ppo_trainer → base → 16gpu），最后本文件 override。
+#
+# 启动（长任务，必须 tmux/nohup 后台）：
+#   tmux new -d -s startup 'bash scripts/train_startup.sh'
+#   tmux attach -t startup
+
+defaults:
+  - ../_generated_ppo_trainer
+  - ../base
+  - agent_rl_16gpu
+
+# ── 覆盖：128 冷启动种子 + 步数 ───────────────────────────────────────────────
+data:
+  train_files: ${oc.env:TRAIN_FILES,/mnt/afs_toolcall/sunhao4/workspace/self-evolving-agent-rl/datasets/train_coding_128.parquet}  # 128 条冷启动 = S=2N=128
+
+trainer:
+  total_training_steps: ${oc.env:TOTAL_STEPS,50}   # 默认跑 50 步，step 2+ 靠自进化种子
+  experiment_name: agent_rl_startup_pure_selfevolve

@@ -128,7 +128,7 @@ reward:
 # 选组层(淘汰+选 N 组)在 _step_once 的 sample 后、advantage 前做(待实现).
 #   16-GPU: N=64, S=128, n=8 → rollout 1024 条, 选组后训练 512 条.
 data:
-  train_files: ${oc.env:TRAIN_FILES,/mnt/afs_toolcall/sunhao4/workspace/agentic_cl_research/datasets/train_cl.parquet}
+  train_files: ${oc.env:TRAIN_FILES,/mnt/afs_toolcall/sunhao4/workspace/self-evolving-agent-rl/datasets/train_coding_3200.parquet}  # 纯 coding 3200 条 = 50 步 × 64/步
   val_files: ${oc.env:VAL_FILES,null}
   train_batch_size: 128                  # S=2N=128 (超生量: verl 一步处理 128 prompt → rollout 1024 条)
   gen_batch_size: 64                     # N=64 (抓取块; 128 是 64 的倍数, 满足 verl; 选组后训练 512 条)
@@ -153,7 +153,7 @@ trainer:
   nnodes: ${oc.env:NNODES,2}
   n_gpus_per_node: ${oc.env:N_GPUS_PER_NODE,8}
   total_epochs: 1
-  total_training_steps: 20             # 自进化 20-step 训练
+  total_training_steps: 50             # 自进化 50-step 训练 (coding 3200 条 = 50×64)
   save_freq: 10                        # 每 10 步存一次 checkpoint
   test_freq: -1                        # 离线评测，关在线验证
   val_before_train: false
