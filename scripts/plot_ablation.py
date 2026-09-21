@@ -1,4 +1,11 @@
-"""消融实验双指标对比图：coding 得分 + 方差坍缩步数。"""
+"""消融实验：每个消融组单独出图。
+
+每张图对比"完整系统"与"去掉该机制"的三项指标：
+  coding 得分、方差坍缩步数、评测得分。
+论文中每张图下方配一段解释（conclusion 字段）说明该实验证明了什么设计的必要性。
+
+产出: master-thesis/figures/fig_ablation_<slug>.png  (每个消融组一张)
+"""
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -12,47 +19,50 @@ if _ZH: plt.rcParams["font.sans-serif"]=[_ZH]; plt.rcParams["axes.unicode_minus"
 
 src = os.path.join(os.path.dirname(__file__), "..", "logs", "metrics", "ablation_results.json")
 data = json.load(open(os.path.abspath(src)))
+full = data[0]                       # 完整系统 = 基线
+ablations = data[1:]
 
-names    = [d["name"] for d in data]
-scores   = [d["coding_score"] for d in data]
-colsteps = [d["collapse_step"] for d in data]
+FIGDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "master-thesis", "figures"))
 
-BLUE="#1565C0"; GRAY="#90A4AE"; RED="#C62828"; ORANGE="#E65100"
-colors = [BLUE] + [GRAY]*5 + [RED]  # 完整系统=蓝，去监控=红，其余=灰
+# 英文 slug（文件名用），与消融组一一对应
+SLUGS = {
+    "去差分驱动奖励": "no_diff_reward",
+    "去超采样-淘汰-选组": "no_select",
+    "去跨步状态继承": "no_inherit",
+    "去失败案例自演化": "no_selfevolve",
+}
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5))
+BLUE = "#1565C0"   # 完整系统
+ORANGE = "#E8963A" # 消融组
 
-x = np.arange(len(names))
-w = 0.6
+def plot_one(ab):
+    name = ab["name"]
+    slug = SLUGS.get(name, name)
+    # 三指标: coding得分 / 坍缩步 / 评测得分。坍缩步量纲不同, 用三个子图。
+    metrics = [
+        ("coding 得分",   full["coding_score"], ab["coding_score"], (0.40, 0.50), "{:.3f}"),
+        ("方差坍缩步数",   full["collapse_step"], ab["collapse_step"], (0, 58),     "{:.0f}"),
+        ("评测得分",      full["eval_score"],    ab["eval_score"],    (0.34, 0.44), "{:.3f}"),
+    ]
+    fig, axes = plt.subplots(1, 3, figsize=(11, 4))
+    for ax, (title, vfull, vab, ylim, fmt) in zip(axes, metrics):
+        bars = ax.bar([0, 1], [vfull, vab], color=[BLUE, ORANGE], width=0.6,
+                      edgecolor="white", zorder=3)
+        for b, v in zip(bars, [vfull, vab]):
+            lbl = fmt.format(v)
+            if title == "方差坍缩步数" and v >= 50:
+                lbl = "50(稳定)"
+            ax.text(b.get_x()+b.get_width()/2, v + (ylim[1]-ylim[0])*0.015, lbl,
+                    ha="center", va="bottom", fontsize=11, fontweight="bold")
+        ax.set_xticks([0, 1]); ax.set_xticklabels(["完整系统", name], fontsize=10)
+        ax.set_ylim(*ylim); ax.set_title(title, fontsize=12)
+        ax.grid(axis="y", alpha=0.3, zorder=0)
+    fig.suptitle(f"消融：{name}", fontsize=13, fontweight="bold")
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    out = os.path.join(FIGDIR, f"fig_ablation_{slug}_zh.png")
+    fig.savefig(out, dpi=185, bbox_inches="tight", facecolor="white")
+    plt.close()
+    print(f"saved {out}")
 
-# ── 左: coding 得分 ──
-bars = ax1.bar(x, scores, color=colors, width=w, edgecolor="white", zorder=3)
-for b, s in zip(bars, scores):
-    ax1.text(b.get_x()+b.get_width()/2, s+0.002, f"{s:.3f}",
-             ha="center", va="bottom", fontsize=9, fontweight="bold")
-ax1.set_xticks(x); ax1.set_xticklabels(names, rotation=25, ha="right", fontsize=9.5)
-ax1.set_ylabel("Coding 任务平均得分"); ax1.set_ylim(0.40, 0.50)
-ax1.set_title("（a）各消融组 Coding 得分", fontsize=12)
-ax1.grid(axis="y", alpha=0.3, zorder=0)
-ax1.axhline(scores[0], color=BLUE, lw=1.2, ls="--", alpha=0.5, zorder=2)
-
-# ── 右: 坍缩步数 ──
-bars2 = ax2.bar(x, colsteps, color=colors, width=w, edgecolor="white", zorder=3)
-for b, s in zip(bars2, colsteps):
-    label = str(s) if s < 50 else "50(稳定)"
-    ax2.text(b.get_x()+b.get_width()/2, s+0.5, label,
-             ha="center", va="bottom", fontsize=9, fontweight="bold")
-ax2.set_xticks(x); ax2.set_xticklabels(names, rotation=25, ha="right", fontsize=9.5)
-ax2.set_ylabel("方差坍缩步数（首次触及阈值，50=未触发）")
-ax2.set_ylim(0, 58)
-ax2.set_title("（b）各消融组方差坍缩步数", fontsize=12)
-ax2.grid(axis="y", alpha=0.3, zorder=0)
-ax2.axhline(50, color=BLUE, lw=1.2, ls="--", alpha=0.5, zorder=2)
-
-fig.tight_layout(pad=2.0)
-out = os.path.join(os.path.dirname(__file__), "..", "master-thesis", "figures",
-                   "fig_fig15_ablation_zh.png")
-out = os.path.abspath(out)
-fig.savefig(out, dpi=185, bbox_inches="tight", facecolor="white")
-plt.close()
-print(f"saved {out}")
+for ab in ablations:
+    plot_one(ab)
