@@ -19,6 +19,119 @@ _STYLE = (
 
 FIGURES = [
     {
+        "key": "fig16_multiagent",
+        "title": "图 多智能体协作数据生成",
+        "prompt": (
+            "A clean academic diagram of three collaborating agents that turn one sampling "
+            "round into a self-driven interaction episode, laid out left-to-right with arrows. "
+            "All text labels in Simplified Chinese. "
+            "Center-left: a blue box '执行者 Actor（被训练策略 πθ）' inside a light-gray "
+            "'代码沙箱 Sandbox', running a ReAct loop (思考→调用工具→观察) with tool icons "
+            "(terminal / python / file). It produces '交互轨迹 τ'. "
+            "Right of it: a green box '观察者 Observer' that takes a before-snapshot and an "
+            "after-snapshot of the sandbox and computes '确定性状态差分'（文件系统变更+系统状态变更），"
+            "labeled '不使用大模型，保证取证确定性'. Output: '客观状态报告'. "
+            "Far right / looping back: an orange box '提问者 Questioner（人设驱动的模拟用户）' "
+            "that reads the execution summary + sandbox state and generates '下一轮种子任务', "
+            "with a curved arrow feeding back to the Actor as the next round input. "
+            "Bottom caption band: '三者协作：数据产生 / 状态取证 / 任务追问 全部自主化，无需人工标注'. "
+            "Color convention: Actor=blue, Observer=green, Questioner=orange, sandbox=light gray. "
+            "Flat vector academic style, white background, muted colors, no photorealism. " + _STYLE
+        ),
+    },
+    {
+        "key": "fig17_stability",
+        "title": "图 自进化稳定性控制",
+        "prompt": (
+            "A clean academic monitoring-and-guard diagram for training stability control. "
+            "All text labels in Simplified Chinese. "
+            "Left: a box '训练步 每步产出指标' feeding a central purple '稳定性监控器 Monitor'. "
+            "The Monitor lists five watched metrics as rows, each with a small gauge/threshold icon: "
+            "'① 奖励标准差 → 0（多样性坍缩 / Echo Trap）', "
+            "'② 优势标准差 → 0（无梯度信号）', "
+            "'③ 策略 KL 散度 过大（策略偏离过远）', "
+            "'④ 训练损失 出现 NaN/Inf（数值崩溃）', "
+            "'⑤ 存活组数 < 训练组数 N（超采样池耗尽）'. "
+            "From the Monitor, two outgoing branches: a green arrow '全部正常 → 继续下一步训练' "
+            "looping back to the training step; and a red arrow '任一触发阈值 → 自动终止训练' "
+            "pointing to a red STOP box '判定自进化失稳，终止'. "
+            "Flat vector academic style, white background, muted colors, monitor=purple, "
+            "normal=green, alarm=red, no photorealism. " + _STYLE
+        ),
+    },
+    {
+        "key": "fig18_sandbox_env",
+        "title": "图5.2 沙箱环境与状态管理",
+        "prompt": (
+            "A clean academic diagram of sandbox environment and state management. "
+            "All text labels in Simplified Chinese. "
+            "Center: a gray rounded box '代码沙箱 Sandbox' containing: file system tree icon "
+            "labeled '文件系统 (files, dirs)', process icon '进程与端口', package icon '已安装包'. "
+            "Left side: two snapshots stacked vertically — '执行前快照 S_before' (blue) and "
+            "'执行后快照 S_after' (blue), connected by a downward arrow labeled 'Actor ReAct 执行'. "
+            "Right side: a green box '确定性状态差分 Δ' showing three bullet rows: "
+            "'• 文件变更（创建/修改/删除+内容）', '• 系统状态变更', '• 空差分 → 短路奖励=0'. "
+            "A horizontal arrow from the two snapshots pointing right to the diff box, labeled "
+            "'作差（Observer，不用大模型）'. "
+            "Bottom: a small note '沙箱后端通过注册表解耦，本地/云端零改切换'. "
+            "White background, flat vector academic style, muted colors. " + _STYLE
+        ),
+    },
+    {
+        "key": "fig19_async_schedule",
+        "title": "图5.4 推理与训练异步调度",
+        "prompt": (
+            "A clean academic timeline/pipeline diagram showing async scheduling of inference "
+            "and training. All text labels in Simplified Chinese. "
+            "Two horizontal swim-lanes stacked: top lane '推理引擎 (vLLM/LightLLM)' in blue, "
+            "bottom lane '训练器 (GRPO Trainer)' in orange. "
+            "Timeline blocks left to right: "
+            "Blue block 'Rollout 超采样 S×n 条轨迹 (推理引擎独占GPU)' → "
+            "gap with downward arrow '交出 GPU + 传轨迹' → "
+            "Orange block 'GRPO 更新 (训练器独占GPU)' → "
+            "gap with upward arrow '权重同步回推理引擎' → "
+            "Blue block 'Rollout 下一步'. "
+            "Annotate that during each phase the other lane is idle (grayed). "
+            "Side note: '互不阻塞 → 提升系统吞吐'. "
+            "White background, flat vector academic style, blue and orange palette. " + _STYLE
+        ),
+    },
+    {
+        "key": "fig20_decouple",
+        "title": "图5.5 采样与训练解耦",
+        "prompt": (
+            "A clean academic flow diagram showing the decoupling of sampling and training. "
+            "All text labels in Simplified Chinese. "
+            "Left box (blue): '超采样层 S×n 条轨迹' with label '框架官方注入点接入'. "
+            "Arrow → center box (purple): '选组层 (淘汰+选组)' with two sub-steps: "
+            "'淘汰低质组 S→R（最大reward后20%且<0.5）' and '选梯度最优N组 R→N（按|advantage|均值）'. "
+            "Arrow → right box (orange): '训练批次 N×n 条' with label 'GRPO更新'. "
+            "Below the flow, show S > R > N as a funnel shape with numbers 128 → ~90 → 64. "
+            "Annotation: '多推理少训练 — 提升每步训练信号质量'. "
+            "White background, flat vector academic style. " + _STYLE
+        ),
+    },
+    {
+        "key": "fig21_data_pipeline",
+        "title": "图5.6 自进化数据处理流程",
+        "prompt": (
+            "A clean academic vertical flowchart showing the data processing pipeline for "
+            "one training step. All text labels in Simplified Chinese. "
+            "Boxes top to bottom connected by arrows: "
+            "1. '种子任务 Q_t（S个）' (light blue input) "
+            "→ 2. '执行者 Rollout（沙箱内 ReAct）→ S×n 条轨迹' (blue) "
+            "→ 3. '观察者取证 → 确定性状态差分 Δ' (green) "
+            "→ 4. '冻结裁判打分 → 奖励 R' (green, note: 空差分短路=0) "
+            "→ 5. '优势计算（GRPO组内归一化）→ Â' (purple) "
+            "→ 6. '淘汰低质组 + 选梯度最优N组' (purple) "
+            "→ 7. 'GRPO 更新 θ_{t+1}' (orange) "
+            "→ 8. '跨步：提问者生成 Q_{t+1}（存活组→新种子）' (orange, curved arrow back to top). "
+            "On the right side, a dashed vertical branch from step 4: "
+            "'失败案例 → 缓冲 B → 每10步/20例触发LLM归因 → 提示词/基建自演化'. "
+            "White background, flat vector academic style, muted colors. " + _STYLE
+        ),
+    },
+    {
         "key": "fig2_dataflow_zh",
         "title": "图2 数据-训练完整流程(中文版)",
         "prompt": (
