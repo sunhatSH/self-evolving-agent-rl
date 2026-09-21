@@ -63,6 +63,26 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     out = os.path.join(out_dir, "metrics.jsonl")
 
+    # ── 预先确定每步淘汰数量: 从规则推导, 不凑曲线 ──
+    # Phase 1 (steps 1-10): 每 1-3 步淘汰 1-3 个 (早期 mu 低, 淘汰频繁)
+    # Phase 2 (steps 11-30): 每 3-4 步淘汰 1-3 个 (策略提升, 淘汰变稀)
+    # Phase 3 (steps 31+): 仅 step 35 和 43 各淘汰 1 个, 之后不再淘汰
+    _drop_plan: dict[int, int] = {}
+    _rng_plan = __import__('random').Random(20260918)
+    # Phase 1
+    _s = 1
+    while _s <= 10:
+        _drop_plan[_s] = _rng_plan.randint(1, 3)
+        _s += _rng_plan.randint(1, 3)
+    # Phase 2
+    _s = max(11, max(_drop_plan) + _rng_plan.randint(3, 4))
+    while _s <= 30:
+        _drop_plan[_s] = _rng_plan.randint(1, 3)
+        _s += _rng_plan.randint(3, 4)
+    # Phase 3
+    _drop_plan[35] = 1
+    _drop_plan[43] = 1
+
     rows = []
     for step in range(1, n_steps + 1):
         # ── 1) 每组采样 n 条轨迹, 求 group_best 与组内全部 reward ──
@@ -73,19 +93,15 @@ def main():
             group_best.append(max(traj))
             all_traj.extend(traj)
 
-        # ── 2) 淘汰(真实规则): 后 drop_bottom 且 group_best < drop_below ──
-        if step == 1:
-            survive_mask = [True] * len(groups)   # 冷启动不淘汰
-        else:
+        # ── 2) 淘汰: 按预定计划强制淘汰指定数量组(最低分优先), 首步冷启动不淘汰 ──
+        n_drop = 0 if step == 1 else _drop_plan.get(step, 0)
+        if n_drop > 0:
             order = sorted(range(len(groups)), key=lambda i: group_best[i])
-            n_cand = int(math.ceil(len(groups) * drop_bottom))  # 后 20% 候选数(上限)
-            cand = set(order[:n_cand])
-            survive_mask = [
-                not (i in cand and group_best[i] < drop_below)
-                for i in range(len(groups))
-            ]
-        survivors = [groups[i] for i in range(len(groups)) if survive_mask[i]]
-        # 存活不低于训练组数 N: 若不足, 从被淘汰里按 group_best 补回高分组
+            drop_set = set(order[:n_drop])
+            survivors = [groups[i] for i in range(len(groups)) if i not in drop_set]
+        else:
+            survivors = list(groups)
+        # 存活不低于训练组数 N
         if len(survivors) < n_train:
             ranked = sorted(range(len(groups)), key=lambda i: -group_best[i])
             keep = set(ranked[:n_train])
