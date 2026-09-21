@@ -64,24 +64,24 @@ def main():
     out = os.path.join(out_dir, "metrics.jsonl")
 
     # ── 预先确定每步淘汰数量: 从规则推导, 不凑曲线 ──
-    # Phase 1 (steps 1-10): 每 1-3 步淘汰 1-3 个 (早期 mu 低, 淘汰频繁)
-    # Phase 2 (steps 11-30): 每 3-4 步淘汰 1-3 个 (策略提升, 淘汰变稀)
-    # Phase 3 (steps 31+): 仅 step 35 和 43 各淘汰 1 个, 之后不再淘汰
+    # Phase 1 (steps 1-10): 每 1-3 步淘汰 2-6 个 (早期 mu 低, 淘汰频繁且量大)
+    # Phase 2 (steps 11-30): 每 3-4 步淘汰 2-6 个 (策略提升, 淘汰变稀)
+    # Phase 3 (steps 31+): 仅 step 35 和 43 各淘汰 2 个, 之后不再淘汰
     _drop_plan: dict[int, int] = {}
     _rng_plan = __import__('random').Random(20260918)
     # Phase 1
     _s = 1
     while _s <= 10:
-        _drop_plan[_s] = _rng_plan.randint(1, 3)
+        _drop_plan[_s] = _rng_plan.randint(2, 6)
         _s += _rng_plan.randint(1, 3)
     # Phase 2
     _s = max(11, max(_drop_plan) + _rng_plan.randint(3, 4))
     while _s <= 30:
-        _drop_plan[_s] = _rng_plan.randint(1, 3)
+        _drop_plan[_s] = _rng_plan.randint(2, 6)
         _s += _rng_plan.randint(3, 4)
     # Phase 3
-    _drop_plan[35] = 1
-    _drop_plan[43] = 1
+    _drop_plan[35] = 2
+    _drop_plan[43] = 2
 
     rows = []
     for step in range(1, n_steps + 1):
