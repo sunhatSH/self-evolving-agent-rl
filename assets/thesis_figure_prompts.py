@@ -113,6 +113,29 @@ FIGURES = [
         ),
     },
     {
+        "key": "fig14_badcase_evolve",
+        "title": "图4.5 失败案例驱动的评估器与基建自演化",
+        "prompt": (
+            "A clean academic flowchart for a self-evolving RL training system's failure-case "
+            "attribution and evolution loop. Top center: a teal rounded box labeled "
+            "'Failure-Case Buffer' with a small counter icon (collects every 10 steps or 20 cases). "
+            "An arrow labeled 'Periodic trigger' points down to a central teal diamond labeled "
+            "'LLM Attribution' with subtitle '(integrates task intent + trajectory + env evidence)'. "
+            "From the diamond, two branches split: "
+            "Left branch (orange): label 'Model Issue' → orange box 'Incremental Prompt Patch' "
+            "with three sub-bullets: '• Judge prompt', '• Questioner prompt', '• Actor prompt'. "
+            "Right branch (green): label 'Infra Issue' → green box 'Skill Synthesis & Infra Expansion' "
+            "with three sub-bullets: '• Summarize reusable skill', '• Register tool / add dep', "
+            "'• Fix harness / sandbox'. "
+            "Both orange and green boxes have a curved dashed return arrow back to the main training "
+            "loop box at the bottom labeled 'Next Training Step (evolved evaluator & infra)'. "
+            "A separate small box on the left labeled 'Training Loop' feeds failed trajectories "
+            "(red dashed arrow) into the Failure-Case Buffer. "
+            "All labels in Chinese. White background. Flat vector academic style, muted colors, "
+            "no photorealism. " + _STYLE
+        ),
+    },
+    {
         "key": "fig4_self_evolve_loop",
         "title": "图4 跨step自进化闭环",
         "prompt": (
