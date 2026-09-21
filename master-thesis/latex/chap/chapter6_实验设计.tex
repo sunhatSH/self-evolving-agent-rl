@@ -71,6 +71,20 @@
 
 从图~\ref{fig:s_shrink} 可见，$S$ 呈单调不增的阶梯式收缩，且\textbf{前期下降快、后期趋于平缓}。这一走势与淘汰判据直接相关：淘汰的条件之一是组内最大 reward 低于阈值。训练前期模型能力尚弱、整体 reward 偏低，较多组的最大 reward 达不到阈值，因而容易满足淘汰条件、被大量剔除，$S$ 快速下降；随着训练推进、策略能力提升，各组 reward 整体抬高，越来越少的组落入淘汰区间，淘汰量随之减小，$S$ 的收缩逐步放缓并最终稳定在训练组数 $N$ 附近。$S$ 始终未塌缩至零、且各步跨步种子均成功生成，表明自进化闭环稳定成立。
 
+
+\subsection*{消融验证}
+
+为分离跨步状态继承的独立贡献，本节设置对照组：去掉状态继承，每步从全新沙箱开始，其余配置不变。如图~\ref{fig:ablation_no_inherit} 所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/fig_ablation_no_inherit_zh.png}
+    \caption{消融：去跨步状态继承，与完整系统三指标对比}
+    \label{fig:ablation_no_inherit}
+\end{figure}
+
+\textit{（分析待补：实验现象与结论，经导师指导后填入。）}
+
 \section{自主数据生成效果}
 \label{sec:exp_data}
 
@@ -88,10 +102,38 @@
 
 本节验证差分驱动奖励的抗作弊效果：对比裁判依据状态差分打分与依据智能体自述打分的差异，统计智能体自述与环境差分不一致（即潜在作弊）的比例，以及空差分短路（无环境效果直接判 0）的比例。
 
+
+\subsection*{消融验证}
+
+为分离差分驱动奖励的独立贡献，本节设置对照组：去掉差分驱动奖励，改由裁判仅依据模型自述打分，其余配置不变。如图~\ref{fig:ablation_no_diff} 所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/fig_ablation_no_diff_reward_zh.png}
+    \caption{消融：去差分驱动奖励，与完整系统三指标对比}
+    \label{fig:ablation_no_diff}
+\end{figure}
+
+\textit{（分析待补：实验现象与结论，经导师指导后填入。）}
+
 \section{超采样-淘汰-选组效果}
 \label{sec:exp_select}
 
 本节验证超采样-淘汰-选组对训练信号质量的提升：对比淘汰前后组的优势标准差分布，验证淘汰是否有效剔除低质组；对比选组前后训练批次的梯度信号强度，验证选梯度最优组是否提升每步训练信号质量。
+
+
+\subsection*{消融验证}
+
+为分离超采样-淘汰-选组的独立贡献，本节设置对照组：去掉筛选机制，所有 $S \times n$ 轨迹直接进入 GRPO 梯度，其余配置不变。如图~\ref{fig:ablation_no_select} 所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/fig_ablation_no_select_zh.png}
+    \caption{消融：去超采样-淘汰-选组，与完整系统三指标对比}
+    \label{fig:ablation_no_select}
+\end{figure}
+
+\textit{（分析待补：实验现象与结论，经导师指导后填入。）}
 
 \section{强化学习训练效果}
 \label{sec:exp_train}
@@ -120,6 +162,24 @@
 
 本节分析系统的稳定性与资源效率：训练监控指标（奖励标准差、优势标准差、策略 KL 散度）随步的变化，终止判据的触发情况，以及推理／训练异步调度下的资源利用率。
 
+\section{失败案例自演化效果}
+\label{sec:exp_selfevolve}
+
+本节验证失败案例驱动的评估器与基建自演化的实际效果：观测训练全程中失败案例的收集情况、归因触发次数，以及归因后提示词与基建扩展的累计变更。
+
+\subsection*{消融验证}
+
+为分离失败案例自演化的独立贡献，本节设置对照组：去掉该机制，提示词与基建在训练全程固定不变，其余配置不变。如图~\ref{fig:ablation_no_selfevolve} 所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/fig_ablation_no_selfevolve_zh.png}
+    \caption{消融：去失败案例自演化，与完整系统三指标对比}
+    \label{fig:ablation_no_selfevolve}
+\end{figure}
+
+\textit{（分析待补：实验现象与结论，经导师指导后填入。）}
+
 \section{模型能力评测}
 \label{sec:exp_eval}
 
@@ -140,65 +200,7 @@
     \label{fig:eval_compare}
 \end{figure}
 
-\section{消融实验}
-
-囿于算力与时间资源，本文无法对系统涉及的每一个机制与超参逐一开展独立消融以精确量化其贡献，因此针对四个核心设计点各做一次消融验证：差分驱动奖励、超采样-淘汰-选组、跨步状态继承、失败案例自演化。稳定性监控机制的作用是在坍缩发生后及时终止训练、避免继续空转，不影响坍缩发生的时机本身，因此不适合以坍缩步数为指标进行消融，此处不设该组。每次去掉一个机制，在相同配置下对比三个指标：训练过程 coding 任务得分（训练信号质量）、方差坍缩步数（训练稳定性，未触发则记为 50 即全程稳定）、以及训练后在独立评测集（ClawEval 纯文本类）上的评测得分。所有参数均以演示系统可运行性为目的而设定，并非经调优的最优取值。
-
-\subsection{消融一：去差分驱动奖励}
-
-去掉差分驱动奖励后，裁判仅依据模型自述打分，奖励作弊空间增大，梯度中混入虚假信号，组内奖励分布被污染。如图~\ref{fig:ablation_no_diff} 所示，coding 得分（0.435）与评测得分（0.371）均明显低于完整系统（0.472 / 0.401），方差坍缩最早发生（29 步）。
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.9\textwidth]{figures/fig_ablation_no_diff_reward_zh.png}
-    \caption{消融一：去差分驱动奖励，与完整系统三指标对比}
-    \label{fig:ablation_no_diff}
-\end{figure}
-
-\textbf{结论：} 差分取证是抑制奖励作弊、保证训练信号可信的核心手段。去掉后梯度被虚假奖励污染、坍缩最早（29 步）、评测下降最明显，证明该机制不可缺少。
-
-\subsection{消融二：去超采样-淘汰-选组}
-
-去掉筛选机制后，全部 $S \times n$ 轨迹均进入 GRPO 梯度，退化组（全对/全错）拉低每步梯度信号密度。如图~\ref{fig:ablation_no_select} 所示，coding 得分降至 0.441，评测得分 0.381，坍缩步 38。
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.9\textwidth]{figures/fig_ablation_no_select_zh.png}
-    \caption{消融二：去超采样-淘汰-选组，与完整系统三指标对比}
-    \label{fig:ablation_no_select}
-\end{figure}
-
-\textbf{结论：} 超采样-淘汰-选组通过"多推理少训练"提升每步信号密度。去掉后退化组拉低梯度质量、收敛变慢、坍缩提前（38 步），证明该筛选机制是提升自进化效率的必要设计。
-
-\subsection{消融三：去跨步状态继承}
-
-去掉状态继承后，每步从全新沙箱开始，提问者无法在上一轮产出基础上追问，任务跨步连贯性下降。如图~\ref{fig:ablation_no_inherit} 所示，评测得分降至 0.386，坍缩步 44（单步训练逻辑未受影响，故坍缩较晚）。
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.9\textwidth]{figures/fig_ablation_no_inherit_zh.png}
-    \caption{消融三：去跨步状态继承，与完整系统三指标对比}
-    \label{fig:ablation_no_inherit}
-\end{figure}
-
-\textbf{结论：} 跨步状态继承维系了自进化闭环的任务连贯性。去掉后评测下降而稳定性影响有限，说明状态继承主要贡献于闭环质量，是自进化场景特有的关键支撑。
-
-\subsection{消融四：去失败案例自演化}
-
-去掉自演化后提示词与基建全程固定，系统性失败无法修复，随训练积累的无效轨迹逐渐拖低整体质量。如图~\ref{fig:ablation_no_selfevolve} 所示，评测得分降至 0.391，坍缩步 46，均略低于完整系统。
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.9\textwidth]{figures/fig_ablation_no_selfevolve_zh.png}
-    \caption{消融四：去失败案例自演化，与完整系统三指标对比}
-    \label{fig:ablation_no_selfevolve}
-\end{figure}
-
-\textbf{结论：} 失败案例驱动的评估器与基建自演化使系统能自主修复训练中暴露的系统性缺陷。去掉后长程训练中无效轨迹积累拖低质量，证明该机制对系统长期健康不可缺少。
-
-\subsection{消融小结}
-
-四个核心机制均带来了可观测的提升：差分驱动奖励对稳定性影响最显著（坍缩最早），超采样-淘汰-选组主要贡献于训练信号密度，跨步状态继承主要贡献于自进化闭环的任务连贯性，失败案例自演化则在长程训练中持续改善评估器与基建质量。稳定性监控及其余设计点的独立贡献，受限于资源未能设置消融，有待后续补充。
+% 消融实验已拆入各机制效果节，见 sec:exp_reward / sec:exp_select / sec:exp_loop / sec:exp_selfevolve
 
 \section{实验结果讨论}
 
