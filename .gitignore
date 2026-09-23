@@ -115,3 +115,5 @@ rewardmodel_choose/results/
 agentic-cl/
 *copy.doc
 !master-thesis/ref/*.pdf
+# 最终论文 PDF：跟踪进 git（其余 master-thesis 编译产物仍忽略）
+!master-thesis/最终稿/main.pdf
