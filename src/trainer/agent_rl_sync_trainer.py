@@ -163,24 +163,51 @@ def select_groups(
     group_size: int = 8,
     drop_bottom_pct: float = 0.2,
     drop_below: float = 0.5,
-) -> tuple[KVBatchMeta, list[str]]:
-    """选组层: 淘汰(S→R) + 选组(R→N). 返回 (训练子集, 存活组 uids R).
+    mini_batch_align: int = 0,
+) -> tuple[KVBatchMeta, list[str], list[str]]:
+    """选组层. 三个\\textbf{相互解耦}的决定, 各有独立判据:
 
-    两件独立的事:
-    - 淘汰: S 组 → R 组. 丢烂组(该组最优 reward 同时满足 后 drop_bottom_pct% 且 < drop_below).
-      同时满足才丢 → ≥80% 存活. R 是【下一轮的 S】(存活组做追问), 也是这一轮训练的候选池.
-    - 选组: 从 R 组按组内 advantage 绝对值均值降序, 选梯度最优 N 组训练.
+    1. \\textbf{能否进训练}(GRPO 更新): 组必须完整(group_size 条算优势归一化).
+       组内有效轨迹 >= 50% → 复制补齐到 group_size 后可训; < 50% → 不进训练.
+       再叠加淘汰规则(最优 reward 后 drop_bottom_pct% 且 < drop_below 同时满足才丢),
+       并按组内 advantage 均值选梯度最优 N 组. → 训练子集.
+    2. \\textbf{任务/沙箱能否进下一轮采样}(跨步种子): 只要组内 >= 1 条有效轨迹
+       (该任务本轮跑出过有效结果), 其任务与沙箱即可进下一轮. 与"能否进训练"无关——
+       残缺组不进训练, 但只要出过有效结果, 任务不该被误杀. → 任务存活 uids.
 
     返回:
       - 训练子集 KVBatchMeta (select_keys, batch_size = N × group_size)
-      - 存活组 uids (R 个, 供 _step_once 存下, 下一轮对这些组追问)
+      - 训练存活组 uids (过完整性+淘汰的 R 组, 训练候选池; 已不再用于跨步)
+      - 任务存活组 uids (>= 1 条有效轨迹的所有组, 供下一轮 Questioner 追问)
     """
     all_groups = _group_keys_by_uid(list(batch.keys))
-    # 只保留完整组(恰好 group_size 条). 残缺组丢弃(GRPO 要完整组).
-    groups = {uid: keys for uid, keys in all_groups.items() if len(keys) == group_size}
-    n_incomplete = len(all_groups) - len(groups)
-    if n_incomplete:
-        print(f"[select] dropped {n_incomplete} incomplete groups (<{group_size} sessions)", flush=True)
+    # batch.keys 每个 key = 一条【有效】轨迹(失败/超时的没进 tq), 故 len(keys)=组内有效轨迹数.
+    # 三分类, 对应三个解耦决定:
+    #   · 有效 >= 50% (>= ceil(group_size/2))  → 进训练(变长组: 有几条算几条,
+    #     GRPO 组内优势按实际条数归一化, 不复制不补齐 —— verl compute_grpo_outcome_advantage
+    #     按 uid 分组, len 可变; 复制会造成组内重复样本、σ 失真, 故不复制).
+    #   · 0 < 有效 < 50%                        → 不进训练, 但任务存活(下一轮追问)
+    #   · 有效 == 0(整组全死)                   → 任务也淘汰
+    min_valid = (group_size + 1) // 2  # ceil(group_size/2), >= 50%
+    groups = {}          # 可进训练的组(变长, 保留实际有效轨迹)
+    n_varlen = 0         # 有效 < group_size 但 >= 50%: 变长进训练
+    n_sparse = 0         # <50% 有效: 不训练但任务存活
+    for uid, keys in all_groups.items():
+        if len(keys) >= min_valid:
+            groups[uid] = keys              # 变长: 直接用实际轨迹, 不补齐
+            if len(keys) < group_size:
+                n_varlen += 1
+        elif len(keys) >= 1:
+            n_sparse += 1  # 不进 groups(不训练), 但在 all_groups 里 → 任务存活
+    # 任务存活集: 只要 >= 1 条有效轨迹(能进 all_groups 即满足, _group_keys_by_uid 不产空组)
+    task_survived_uids = [uid for uid, keys in all_groups.items() if len(keys) >= 1]
+    if n_varlen or n_sparse:
+        print(
+            f"[select] varlen handling: {n_varlen} groups trained variable-length (>=50% valid); "
+            f"{n_sparse} groups <50% valid (kept as task-seeds, not trained); "
+            f"task-survived={len(task_survived_uids)}",
+            flush=True,
+        )
 
     # 读每组最优 reward
     group_best = _read_group_rewards(list(batch.keys), batch.partition_id)
@@ -189,7 +216,11 @@ def select_groups(
         all_keys = []
         for uid in groups:
             all_keys.extend(groups[uid])
-        return (batch.select_keys(all_keys) if all_keys else batch), list(groups.keys())
+        return (
+            batch.select_keys(all_keys) if all_keys else batch,
+            list(groups.keys()),
+            task_survived_uids,
+        )
     group_best = {uid: group_best[uid] for uid in groups if uid in group_best}
 
     # ── 淘汰: S → R (后 drop_bottom_pct% 且 < drop_below 同时满足才丢) ──
@@ -227,12 +258,24 @@ def select_groups(
         flush=True,
     )
 
-    # 构造训练子集: 选中 uid 的所有 keys
+    # 构造训练子集: 选中 uid 的所有 keys(变长, 各组条数可不同)
     selected_keys = []
     for uid in selected_uids:
         selected_keys.extend(groups[uid])
+    # verl make_iterator 硬约束: 训练轨迹总数须能被 (mini_batch × DP) 整除, 否则断言崩.
+    # 变长组使总数不规整, 故向下截断到 align 的整数倍(丢零头轨迹; 任务存活集不受影响).
+    # align 取 mini_batch_align(调用方按 ppo_mini_batch_size×DP 传入); 缺省回退 group_size.
+    if mini_batch_align and mini_batch_align > 0 and selected_keys:
+        n_keep = (len(selected_keys) // mini_batch_align) * mini_batch_align
+        if n_keep < len(selected_keys):
+            print(
+                f"[select] align: {len(selected_keys)} rows → {n_keep} "
+                f"(truncate to multiple of mini_batch_align={mini_batch_align})",
+                flush=True,
+            )
+            selected_keys = selected_keys[:n_keep]
     train_batch = batch.select_keys(selected_keys) if selected_keys else batch
-    return train_batch, survived_uids
+    return train_batch, survived_uids, task_survived_uids
 
 
 if CustomPPOTrainerSync is not None:
@@ -405,17 +448,24 @@ if CustomPPOTrainerSync is not None:
             # 返回训练子集 + 存活组 uids(R). R 组存下 → 下一轮对这些组追问(S=R).
             n_select = self.config.data.get("gen_batch_size", sample_batch_size)
             group_size = self.config.actor_rollout_ref.rollout.n
+            # verl make_iterator 要求训练轨迹总数被 (ppo_mini_batch_size × n) 整除.
+            # ppo_mini_batch_size 是 query 数, ×n 得轨迹数; 变长选组后按此对齐(截零头).
+            _ppo_mini = int(self.config.actor_rollout_ref.actor.get("ppo_mini_batch_size", 0) or 0)
+            mini_batch_align = _ppo_mini * group_size if _ppo_mini > 0 else group_size
             full_batch_keys = list(batch.keys)  # 淘汰前的全 S 组 keys(cross-step 取快照用)
             full_partition = batch.partition_id
             with marked_timer("select", timing_raw, color="magenta"):
-                batch, survived_uids = select_groups(
+                batch, train_survived_uids, task_survived_uids = select_groups(
                     batch,
                     n_select=n_select,
                     group_size=group_size,
                     drop_bottom_pct=0.2,
                     drop_below=0.5,
+                    mini_batch_align=mini_batch_align,
                 )
-            self._survived_uids = survived_uids  # R 组: 下一轮追问对象
+            # 跨步追问用【任务存活集】(>=1 有效轨迹的组), 与"能否进训练"解耦:
+            # 残缺组不进训练, 但只要出过有效结果, 其任务/沙箱仍进下一轮.
+            self._survived_uids = task_survived_uids
 
             # 兜底: 选组后 batch 太小(< 1 组) → skip 该 step, 不进 update_actor
             if len(batch.keys) < group_size:

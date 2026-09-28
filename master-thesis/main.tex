@@ -11,6 +11,8 @@
 \documentclass[promaster]{ructhesis}
 
 % ── 自添宏包（去掉模板示例里与本文无关的 skak 国际象棋、chemfig 化学式）──
+\usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{algorithm}
 \usepackage{algorithmicx}
 \usepackage{algpseudocode}
@@ -46,6 +48,16 @@
 \algnewcommand\algorithmicforeach{\textbf{for each}}
 \algdef{S}[FOR]{ForEach}[1]{\algorithmicforeach\ #1\ \algorithmicdo}
 
+% ── 定理类环境（假设/定义/命题/定理，供第3章形式化小节使用）──
+\usepackage{amsthm}
+\theoremstyle{definition}
+\newtheorem{assumption}{假设}[chapter]
+\newtheorem{definition}{定义}[chapter]
+\theoremstyle{plain}
+\newtheorem{proposition}{命题}[chapter]
+\newtheorem{theorem}{定理}[chapter]
+\renewcommand{\proofname}{\textbf{证明}}
+
 % ── TODO 占位宏（依赖实验结果的数字一律用此标记，不编造）──
 \newcommand{\todo}[1]{{\color{red}[TODO: #1]}}
 % 配图占位框（图未绘制时用，不报错）
@@ -62,7 +74,7 @@
 \title{\thesistitle}
 \author{\thesisauthor}
 \school{智慧治理学院}
-\field{大语言模型、强化学习}
+\field{电子信息-人工智能}
 \studentid{2025104468}
 \advisor{\thesisadvisor}
 \date{\thesisdate}

@@ -139,17 +139,18 @@ def test_select_groups_no_drop_if_not_both(monkeypatch):
     assert selected_uids == {'u4','u3','u2'}
 
 
-def test_select_groups_drops_incomplete(monkeypatch):
-    """残缺组(< group_size 条)应被丢弃, 只选完整组."""
+def test_select_groups_varlen_and_sparse(monkeypatch):
+    """变长组新语义: >=50% 有效进训练(变长, 不补齐); <50% 不训练但任务存活."""
     from trainer.agent_rl_sync_trainer import select_groups
     import trainer.agent_rl_sync_trainer as t
 
-    # 6 组: 4 组完整(2条/组) + 2 组残缺(1条/组). group_size=2, n_select=3
+    # group_size=4, min_valid=2. 4 组:
+    #   u0 完整(4条), u1 >=50%(2条→变长进训练), u2 <50%(1条→不训练但任务存活), u3 完整(4条)
     keys = []
-    for i in range(4):  # 4 完整组
-        keys.extend([f'u{i}_s{j}_0' for j in range(2)])
-    for i in range(4, 6):  # 2 残缺组
-        keys.append(f'u{i}_s0_0')
+    keys.extend([f'u0_s{j}_0' for j in range(4)])
+    keys.extend([f'u1_s{j}_0' for j in range(2)])
+    keys.append('u2_s0_0')
+    keys.extend([f'u3_s{j}_0' for j in range(4)])
 
     class FakeBatch:
         pass
@@ -159,27 +160,28 @@ def test_select_groups_drops_incomplete(monkeypatch):
     captured = {}
     b.select_keys = lambda ks: captured.setdefault('keys', ks)
 
-    scores = {f'u{i}': 0.5 for i in range(6)}
+    scores = {'u0': 0.9, 'u1': 0.9, 'u2': 0.9, 'u3': 0.9}
     monkeypatch.setattr(t, '_read_group_rewards', lambda keys, pid: scores)
-    monkeypatch.setattr(t, '_read_group_advantages', lambda keys, pid: {f'u{i}': 0.1*i for i in range(6)})
+    monkeypatch.setattr(t, '_read_group_advantages', lambda keys, pid: {'u0': 0.3, 'u1': 0.2, 'u3': 0.1})
 
-    select_groups(b, n_select=3, group_size=2)
-    selected_uids = {k.rsplit('_s',1)[0] for k in captured['keys']}
-    # 残缺组 u4, u5 应被丢; 只在完整组 u0-u3 里选 3 个
-    assert 'u4' not in selected_uids
-    assert 'u5' not in selected_uids
-    assert len(selected_uids) == 3
-    # 每组 2 条, 3 组 = 6 条
-    assert len(captured['keys']) == 6
+    _, train_survived, task_survived = select_groups(b, n_select=10, group_size=4)
+    trained_uids = {k.rsplit('_s', 1)[0] for k in captured['keys']}
+    # u0/u1/u3 进训练(>=50%); u1 变长(只2条); u2 不进训练(<50%)
+    assert trained_uids == {'u0', 'u1', 'u3'}
+    assert 'u2' not in trained_uids
+    # u1 变长: 只贡献实际的 2 条(不补齐到 4)
+    assert sum(1 for k in captured['keys'] if k.startswith('u1_')) == 2
+    # 任务存活集: 所有 >=1 有效的组(含 u2)都在
+    assert set(task_survived) == {'u0', 'u1', 'u2', 'u3'}
 
 
-def test_select_groups_complete_only_passthrough(monkeypatch):
-    """完整组数 <= n_select 时, 返回所有完整组(不含残缺)."""
+def test_select_groups_task_survived_decoupled(monkeypatch):
+    """任务存活(>=1有效)与训练存活(>=50%)解耦: <50% 组不训练但任务仍存活."""
     from trainer.agent_rl_sync_trainer import select_groups
     import trainer.agent_rl_sync_trainer as t
 
-    # 2 完整组(2条) + 1 残缺组(1条), n_select=10 → 返回 2 完整组
-    keys = ['u0_s0_0','u0_s1_0','u1_s0_0','u1_s1_0','u2_s0_0']
+    # group_size=4: u0 完整, u1 只 1 条(<50%, 不训练但任务存活)
+    keys = [f'u0_s{j}_0' for j in range(4)] + ['u1_s0_0']
     class FakeBatch:
         pass
     b = FakeBatch()
@@ -188,7 +190,7 @@ def test_select_groups_complete_only_passthrough(monkeypatch):
     captured = {}
     b.select_keys = lambda ks: captured.setdefault('keys', ks)
 
-    select_groups(b, n_select=10, group_size=2)
-    selected_uids = {k.rsplit('_s',1)[0] for k in captured['keys']}
-    assert selected_uids == {'u0', 'u1'}  # u2 残缺被丢
-    assert len(captured['keys']) == 4  # 2 完整组 × 2 条
+    _, train_survived, task_survived = select_groups(b, n_select=10, group_size=4)
+    trained_uids = {k.rsplit('_s', 1)[0] for k in captured['keys']}
+    assert trained_uids == {'u0'}            # 只 u0 进训练
+    assert set(task_survived) == {'u0', 'u1'}  # 但 u1 任务存活(下一轮追问)

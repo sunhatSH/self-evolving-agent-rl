@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "assets"))
 from thesis_figure_prompts import FIGURES  # noqa: E402
 
 _BASE = "https://tokenhub.sensetime.com/v1"
-_DEFAULT_MODEL = "gpt-image-2.5-flare/azure_L/qwb"  # 实测可用(2026-09-14)
+_DEFAULT_MODEL = "gpt-image-2.5-sunburst/openai_L/sfa"  # sunburst+openai 渠道实测可用(2026-09-21)
 _ASSETS = os.path.join(os.path.dirname(__file__), "..", "assets")
 _SIZE = "1536x1024"  # 横版, 适合论文流程图; 若模型不支持退回 1024x1024
 

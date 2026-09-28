@@ -21,10 +21,22 @@ defaults:
   - ../base
   - agent_rl_16gpu
 
-# ── 覆盖：128 冷启动种子 + 步数 ───────────────────────────────────────────────
+# ── 覆盖：128 冷启动种子 + 小 batch 配比 + 步数 ──────────────────────────────
+# 纯自进化(128 种子)下 rollout 有损耗, 选组后有效组数远不足 16gpu 的 N=64.
+# 故 startup 用更小的 S/N 配比, 匹配小种子池, 避免"选组样本 < 一个 mini_batch"崩溃:
+#   N=16 (gen_batch=16, ppo_mini=16), S=2N=32 (train_batch=32).
+#   超采样 S=32 组×n8=256 轨迹 → 选组 N=16 组×8=128 轨迹训练.
+#   mini_batch_align = ppo_mini(16)×n(8) = 128; 变长选组后按此对齐(截零头).
+# verl 约束: train_batch(32) = 2× gen_batch(16) ✓; 关键是种子池够扛 rollout 损耗.
 data:
-  train_files: ${oc.env:TRAIN_FILES,/mnt/afs_toolcall/sunhao4/workspace/self-evolving-agent-rl/datasets/train_coding_128.parquet}  # 128 条冷启动 = S=2N=128
+  train_files: ${oc.env:TRAIN_FILES,/mnt/afs_toolcall/sunhao4/workspace/self-evolving-agent-rl/datasets/train_coding_128.parquet}  # 128 条冷启动池(S=32 每步取一批, 余量抗损耗)
+  train_batch_size: 32                   # S=2N=32 (超采样: 一步处理 32 prompt → rollout 256 条)
+  gen_batch_size: 16                     # N=16 (抓取块; 32 是 16 的倍数)
+
+actor_rollout_ref:
+  actor:
+    ppo_mini_batch_size: 16              # N=16 (选组后训练的 query 数, ×n8=128 条/更新)
 
 trainer:
-  total_training_steps: ${oc.env:TOTAL_STEPS,50}   # 默认跑 50 步，step 2+ 靠自进化种子
+  total_training_steps: ${oc.decode:${oc.env:TOTAL_STEPS,50}}   # oc.decode:env 字符串→int；默认 50 步，step 2+ 靠自进化种子
   experiment_name: agent_rl_startup_pure_selfevolve

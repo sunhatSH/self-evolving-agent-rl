@@ -127,9 +127,12 @@ export ULYSSES_SP_SIZE="$ULYSSES_SP" TRAIN_BATCH_SIZE="$TRAIN_BATCH" PPO_MINI_BA
 export CUDA_VISIBLE_DEVICES="$CUDA_DEVICES"
 export ROLLOUT_GPU_MEM_UTIL="$GPU_MEM_UTIL"
 export HF_DATASETS_CACHE="/tmp/hf_datasets_cache" HF_HOME="/tmp/hf_home"
-# 训练集：默认 train_cl.parquet（coding→research 续训实验，2 桶 × 6400 中等难度，见 scripts/pipeline/build_train.py）。
-# ⚠️ k2 等 5 桶正式实验重启续训时，需显式 TRAIN_FILES=$ROOT_DIR/datasets/train.parquet 覆盖。
-export TRAIN_FILES="${TRAIN_FILES:-$ROOT_DIR/datasets/train_cl.parquet}"
+# 训练集：不在此强制默认。TRAIN_FILES 未设时留空，由各 run config 的
+# ${oc.env:TRAIN_FILES,<config默认>} 决定数据集（startup→train_coding_128、
+# 16gpu→train_coding_3200、4gpu→smoke_simple）。只有需要覆盖 config 默认时才显式导出。
+# ⚠️ 历史遗留：曾在此硬默认到不存在的 train_cl.parquet（CL 老实验路径），
+# 会污染所有 config 的数据集选择、导致 FileNotFound，已移除。
+[ -n "${TRAIN_FILES:-}" ] && export TRAIN_FILES
 export VLLM_GDN_PREFILL_BACKEND="${VLLM_GDN_PREFILL_BACKEND:-triton}"
 # ── NCCL cuMem 关闭（防 16卡 lightllm 起服 hang）──────────────────────────────
 # lightllm 开 enable_torch_memory_saver(cuMem VMM 劫持 cudaMalloc) × NCCL 默认

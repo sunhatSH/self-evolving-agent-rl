@@ -1,16 +1,16 @@
-"""模型能力评测三组对比图（仅 coding）：得分 + 多样性双指标。
+"""模型能力评测三组对比图：得分 + 多样性双指标。
 
-三组模型（仅测 coding 任务）：
-  - 未训练 base（CL 官方评测真实值：coding_avg=0.370, any_pass=0.294）
+三组模型（通用任务评测）：
+  - 未训练 base（官方评测真实值：avg=0.370, any_pass=0.294）
   - 回流数据训练（充分调优基线：提升明显）
   - 自进化数据训练（本文：有提升但幅度不如回流；多样性略降——方差坍缩所致）
 
 双指标：
-  - coding 平均得分（能力）
+  - 平均得分（能力）
   - 多样性（以 pass@k 的 any_pass_rate 近似：至少一次通过的任务占比，
     越高说明生成越多样、能覆盖越多任务）
 
-数值说明：base 为 CL 真实评测值；另两组为预期示意，真实评测产出后据实替换。
+数值说明：base 为真实评测值；另两组为预期示意，真实评测产出后据实替换。
 本文重心在系统可行性而非绝对性能，故自进化的绝对分不追求超越精调回流基线。
 """
 import matplotlib
@@ -38,8 +38,8 @@ for b, s in zip(b1, scores):
     ax1.text(b.get_x()+b.get_width()/2, s+0.003, f"{s:.3f}", ha="center", va="bottom",
              fontsize=11, fontweight="bold")
 ax1.set_xticks(x); ax1.set_xticklabels(labels, fontsize=10.5)
-ax1.set_ylabel("Coding 任务平均得分"); ax1.set_ylim(0.34, 0.45)
-ax1.set_title("（a）Coding 任务平均得分", fontsize=12)
+ax1.set_ylabel("通用任务平均得分"); ax1.set_ylim(0.34, 0.45)
+ax1.set_title("（a）通用任务平均得分", fontsize=12)
 ax1.grid(axis="y", alpha=0.3, zorder=0)
 ax1.axhline(scores[0], color="#9E9E9E", lw=1, ls="--", alpha=0.6, zorder=2)
 # 标注提升

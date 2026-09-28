@@ -20,14 +20,19 @@ import time
 import requests
 
 _BASE = "https://tokenhub.sensetime.com/v1"
-_DEFAULT_MODEL = "gpt-image-2.5-flare/azure_L/qwb"
+_DEFAULT_MODEL = "gpt-image-2.5-sunburst/openai_L/sfa"  # sunburst+openai 渠道实测可用(2026-09-21)
 _ASSETS = os.path.join(os.path.dirname(__file__), "..", "assets")
 _PROMPT = (
     "Redraw this exact diagram keeping the IDENTICAL layout, boxes, arrows, colors, icons "
     "and positions unchanged, but translate ALL text labels from English to Simplified "
     "Chinese. Keep all numbers, symbols (S, N, R, 2N, 0.3, x8), stage numbers and structure "
     "exactly the same. Use a clean legible Chinese sans-serif font. Do not add or remove "
-    "any element; only swap English words to their natural Chinese equivalents."
+    "any element; only swap English words to their natural Chinese equivalents. "
+    "IMPORTANT — use these FIXED domain-term translations, do NOT translate them literally: "
+    "'Actor' → '执行者' (NEVER '演员'); 'Observer' → '观察者'; 'Questioner' → '提问者'; "
+    "'Reward Judge'/'Judge' → '裁判'; 'Sandbox' → '沙箱'; 'ReAct' stays 'ReAct'. "
+    "For these role names you may keep the English word in parentheses after the Chinese, "
+    "e.g. '执行者 (Actor)', but the Chinese term is mandatory and must never render as '演员'."
 )
 
 

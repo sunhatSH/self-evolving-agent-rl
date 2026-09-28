@@ -150,8 +150,8 @@ algorithm:
 
 # ── trainer：16 GPU 2 节点，20-step 正式训练 ──────────────────────────────────
 trainer:
-  nnodes: ${oc.env:NNODES,2}
-  n_gpus_per_node: ${oc.env:N_GPUS_PER_NODE,8}
+  nnodes: ${oc.decode:${oc.env:NNODES,2}}          # oc.decode 把 env 字符串 "2" 解码成 int（否则 verl 里 [gpus]*nnodes 报 can't multiply seq by str）
+  n_gpus_per_node: ${oc.decode:${oc.env:N_GPUS_PER_NODE,8}}
   total_epochs: 1
   total_training_steps: 50             # 自进化 50-step 训练 (coding 3200 条 = 50×64)
   save_freq: 10                        # 每 10 步存一次 checkpoint

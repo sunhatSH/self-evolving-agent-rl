@@ -10,11 +10,19 @@ Actor=蓝, Observer=绿, Questioner=橙.
 """
 
 _STYLE = (
-    "Flat vector academic diagram, white background, clean minimal style, "
-    "sans-serif labels, muted professional colors, no photorealism, no clutter, "
-    "high contrast, publication quality for a master's thesis. "
-    "Color convention: Actor agent = blue, Observer agent = green, "
-    "Questioner agent = orange, sandbox = light gray, reward judge = purple."
+    "Minimalist flat line-art academic diagram, pure white background, lots of white space. "
+    "SIMPLE and REFINED like a top-conference paper figure: thin uniform hairline strokes, "
+    "simple rounded or plain rectangles with thin outlines and mostly white/very-light fills, "
+    "straight orthogonal arrows with small clean arrowheads, no crossing lines, everything "
+    "aligned on a tidy grid with generous even spacing. "
+    "Very few colors — mostly black line-art on white, with at most a few soft accent colors "
+    "used sparingly. No gradients, no shadows, no 3D, no glow, no textured background, "
+    "no photorealism, no decorative icons or clip-art, no clutter. "
+    "Minimal short text labels only, legible sans-serif, consistent font size. "
+    "Elegant, restrained, publication-quality master's thesis figure. "
+    "Accent color convention (used sparingly): Actor = blue, Observer = green, "
+    "Questioner = orange, sandbox = light gray, reward judge = purple, "
+    "evaluator & infra = teal."
 )
 
 FIGURES = [
@@ -30,11 +38,10 @@ FIGURES = [
             "(terminal / python / file). It produces '交互轨迹 τ'. "
             "Right of it: a green box '观察者 Observer' that takes a before-snapshot and an "
             "after-snapshot of the sandbox and computes '确定性状态差分'（文件系统变更+系统状态变更），"
-            "labeled '不使用大模型，保证取证确定性'. Output: '客观状态报告'. "
+            "labeled '前后快照作差得到确定性差分'. Output: '客观状态报告'. "
             "Far right / looping back: an orange box '提问者 Questioner（人设驱动的模拟用户）' "
             "that reads the execution summary + sandbox state and generates '下一轮种子任务', "
             "with a curved arrow feeding back to the Actor as the next round input. "
-            "Bottom caption band: '三者协作：数据产生 / 状态取证 / 任务追问 全部自主化，无需人工标注'. "
             "Color convention: Actor=blue, Observer=green, Questioner=orange, sandbox=light gray. "
             "Flat vector academic style, white background, muted colors, no photorealism. " + _STYLE
         ),
@@ -72,8 +79,7 @@ FIGURES = [
             "Right side: a green box '确定性状态差分 Δ' showing three bullet rows: "
             "'• 文件变更（创建/修改/删除+内容）', '• 系统状态变更', '• 空差分 → 短路奖励=0'. "
             "A horizontal arrow from the two snapshots pointing right to the diff box, labeled "
-            "'作差（Observer，不用大模型）'. "
-            "Bottom: a small note '沙箱后端通过注册表解耦，本地/云端零改切换'. "
+            "'前后快照作差 → 确定性差分（Observer）'. "
             "White background, flat vector academic style, muted colors. " + _STYLE
         ),
     },
@@ -92,7 +98,6 @@ FIGURES = [
             "gap with upward arrow '权重同步回推理引擎' → "
             "Blue block 'Rollout 下一步'. "
             "Annotate that during each phase the other lane is idle (grayed). "
-            "Side note: '互不阻塞 → 提升系统吞吐'. "
             "White background, flat vector academic style, blue and orange palette. " + _STYLE
         ),
     },
@@ -107,7 +112,6 @@ FIGURES = [
             "'淘汰低质组 S→R（最大reward后20%且<0.5）' and '选梯度最优N组 R→N（按|advantage|均值）'. "
             "Arrow → right box (orange): '训练批次 N×n 条' with label 'GRPO更新'. "
             "Below the flow, show S > R > N as a funnel shape with numbers 128 → ~90 → 64. "
-            "Annotation: '多推理少训练 — 提升每步训练信号质量'. "
             "White background, flat vector academic style. " + _STYLE
         ),
     },
@@ -137,18 +141,17 @@ FIGURES = [
         "prompt": (
             "一张自进化强化学习系统的端到端流程图, 从左到右分阶段排列, 用大箭头连接. "
             "所有文字标签必须是简体中文, 字体清晰规整. "
-            "阶段1「种子(输入)」: 超采样规模 S 从这里进入. 两个入口箭头: 左侧小箭头标注"
-            "『仅第1步: S=2N(简单初始任务)』, 下方大曲线箭头标注『第2步起: S=R(上一步存活组)』. "
+            "阶段1「输入任务」: 每一轮的输入任务从这里进入, 超采样规模为 S. 两个入口箭头: 左侧小箭头标注"
+            "『仅第1步: S=2N(种子任务)』, 下方大曲线箭头标注『第2步起: S=R(上一步存活组自主生成)』. "
             "阶段2「采样(Rollout)」: S 个查询每个生成 8 条轨迹, 在沙箱里由蓝色 Actor 跑 ReAct, "
             "产生 S×8 条轨迹和沙箱状态. "
-            "阶段3「观察(Observer)」: 绿色 Observer 计算确定性的前后状态差分(不用大模型). "
+            "阶段3「观察(Observer)」: 绿色 Observer 由前后快照作差得到确定性状态差分. "
             "阶段4「奖励(Reward)」: 紫色冻结大模型裁判, 基于差分给每条轨迹打分(差分驱动, 抗奖励作弊). "
             "阶段5「淘汰(Eliminate)」: 丢弃最优奖励同时满足『后20%且低于0.5』的组, 剩下 R 组(至少保留80%). "
             "阶段6「选组(Select)」: 计算优势, 选梯度最强的 N 组(N×8)做 GRPO 更新 Actor 策略. "
             "底部一条大曲线反馈箭头, 标题『跨步自进化』, 从 R 组回流到阶段1: "
             "恢复沙箱文件状态(状态继承), Observer 写执行概括, Questioner 生成下一步种子. "
-            "右下角增加一个青色方框『失败案例自演化』: 收集失败/异常轨迹 → 大模型归因(模型问题 or 基建问题) "
-            "→ 分别热更新提示词 / 动态扩展基建. 每10步或20例触发一次, 用虚线箭头接回阶段1和奖励裁判. "
+            "本图只刻画任务与策略的主循环, 不画评估器/基建的演化(另有单独的图说明). "
             "最右侧一个小监视器框『训练崩溃即停止: 奖励标准差→0, 优势方差→0, pg_loss出现NaN, ppo_kl爆炸』. "
             "阶段编号1-6, 中文标签, 每个 Agent 用不同颜色的框. " + _STYLE
         ),
@@ -166,19 +169,27 @@ FIGURES = [
             "that S = 2N is ONLY the first step's cold start, and from step 2 onward S = R. "
             "STAGE 2 ROLLOUT: each of the S queries spawns 8 trajectories inside sandboxes "
             "(blue Actor running ReAct), producing S x 8 trajectories and sandbox states. "
-            "STAGE 3 OBSERVE: a green Observer computes deterministic before/after state diff "
-            "(no LLM). "
-            "STAGE 4 REWARD: a purple frozen LLM Judge scores each trajectory grounded on the "
-            "diff (diff-driven, anti reward-hacking). "
+            "STAGE 3 OBSERVE: a green Observer computes the deterministic before/after state diff "
+            "from sandbox snapshots. "
+            "STAGE 4 REWARD: a purple frozen LLM Judge, labeled 'Judge(·; Phi_t)', scores each "
+            "trajectory grounded on the diff and conditioned on the current evaluator&infra state "
+            "Phi_t (diff-driven, anti reward-hacking). "
             "STAGE 5 ELIMINATE: drop groups whose best reward is BOTH bottom-20% AND below 0.3, "
             "leaving R groups (>=80% survive). "
             "STAGE 6 SELECT: compute advantage, pick the N gradient-strongest groups (N x 8) "
             "for GRPO update of the Actor policy. "
-            "Then a big curved feedback arrow labeled 'CROSS-STEP SELF-EVOLUTION' loops from "
+            "Then a big curved SOLID feedback arrow labeled 'CROSS-STEP SELF-EVOLUTION (task & policy)' "
+            "loops from "
             "the R groups back into STAGE 1 as the next step's input: for each surviving group, "
             "restore its sandbox file state (state inheritance), the green Observer writes an "
             "LLM execution summary, and the orange Questioner generates the next-step seed "
             "query. Label the loop output clearly 'S = R (feeds back to STAGE 1)'. "
+            "ADD a second DASHED evolution branch (teal box) 'EVALUATOR & INFRA SELF-EVOLUTION "
+            "Phi_t -> Phi_(t+1)': collect the failure-case set B_t -> LLM Attribution "
+            "(MODEL issue or INFRA issue) -> hot-patch prompts / expand infra, triggered every "
+            "10 steps or 20 cases, dashed arrows back to STAGE 1 and the Judge. The figure should "
+            "clearly show TWO evolution loops: a solid one evolving 'task & policy', a dashed one "
+            "evolving 'evaluator & infra' — together a four-dimensional self-evolution. "
             "At the far right a small monitor box 'STOP when training collapses: reward std->0, "
             "advantage variance->0, pg_loss NaN, ppo_kl explodes'. "
             "Number the stages 1-6, use clean English labels, distinct colored boxes per agent. "
@@ -198,10 +209,16 @@ FIGURES = [
             "A GRPO Trainer box updates the Actor policy. Arrows show: Actor executes in "
             "sandbox, Observer captures diff, Judge scores, Trainer updates Actor, Questioner "
             "feeds new tasks back. ADD a Failure-Case Self-Evolution module (teal rounded box, "
-            "bottom): it collects failed/anomalous trajectories, an LLM attributes each to "
-            "either a MODEL issue (dashed arrow updates the Judge/Questioner/Actor prompts) "
-            "or an INFRA issue (dashed arrow expands the Sandbox tools/deps). Label it "
-            "'Failure-Case Self-Evolution (evolves evaluator & infra)'. Label each component "
+            "bottom): it collects failed/anomalous trajectories, an LLM attributes each failure "
+            "to one of TWO root causes, and the two branches point to CLEARLY DIFFERENT targets: "
+            "(1) MODEL/EVALUATOR issue → a dashed arrow pointing to the Judge/Questioner/Actor "
+            "PROMPTS (the evaluator side); "
+            "(2) INFRA issue → a separate dashed arrow pointing to the SANDBOX / TOOLS / "
+            "DEPENDENCIES (the infrastructure side, i.e. the Sandbox box), NOT to the Judge. "
+            "Make sure the infra-expansion arrow lands on the Sandbox/tools, and the "
+            "prompt-update arrow lands on the agents' prompts — do NOT cross or swap them. "
+            "Label the module 'Failure-Case Self-Evolution: evolves evaluator & infra "
+            "(Phi_t -> Phi_(t+1))'. Label each component "
             "clearly in English. " + _STYLE
         ),
     },
@@ -257,8 +274,9 @@ FIGURES = [
             "(restore workspace files to next sandbox), (3) Observer LLM Execution Summary "
             "(green, summarizes what was done, prevents drift), (4) Questioner generates new "
             "follow-up query (orange), (5) Step t+1 new seed -> rollout again. Big curved "
-            "arrows forming a closed loop. Highlight text in center: 'Except the initial seed, "
-            "all subsequent queries are system-generated = self-evolving'. English labels. "
+            "arrows forming a closed loop. The center of the circle is EMPTY — no text, no label, "
+            "no icon inside the central area, just clean white space. English labels on the "
+            "nodes only. "
             + _STYLE
         ),
     },
@@ -352,6 +370,41 @@ FIGURES = [
             "KPIs' (medium, orange), late 'audit a repo, run tests, produce a PDF report' "
             "(hard, red). Annotation: 'As the Actor grows stronger, the Questioner asks "
             "deeper follow-ups = self-evolving curriculum'. English labels. " + _STYLE
+        ),
+    },
+    {
+        "key": "fig_state4_zh",
+        "title": "图3.1 每步同步更新的三类状态在训练轮次间的传递",
+        "prompt": (
+            "一张学术风格的状态传递示意图, 展示自进化强化学习中每个训练步同步更新的三类状态如何在相邻训练步之间传递. "
+            "所有文字为简体中文, 字体清晰规整, 白色背景, 扁平矢量风格, 柔和配色, 无照片写实. "
+            "画面分为左右两个大的竖直虚线框, 左框标题『第 t 步』, 右框标题『第 t+1 步』, 中间用三条水平大箭头从左指向右. "
+            "每条箭头代表一类状态的跨步传递, 从上到下依次为: "
+            "第1行(蓝色)『策略状态 θ_t → θ_(t+1)』, 箭头上标注『GRPO 更新』; "
+            "第2行(灰色)『沙箱状态 s_t → s_(t+1)』, 箭头上标注『最优轨迹快照继承』; "
+            "第3行(橙色)『任务状态 Q_t → Q_(t+1)』, 箭头上标注『提问者再生成(仅 Q_0 为人工种子)』. "
+            "左框内三个状态用三个不同颜色的小圆角框竖直排列, 右框内对应同色的三个框, 一一用箭头连接. "
+            "整体简洁, 三行对齐, 留白充足. "
+            + _STYLE
+        ),
+    },
+    {
+        "key": "fig_infra_evolve_zh",
+        "title": "图3.y 评估器与基建的慢节奏演进",
+        "prompt": (
+            "一张学术风格的时间线示意图, 展示自进化系统中『评估器与基建』如何以慢节奏、间歇触发的方式演进. "
+            "所有文字为简体中文, 字体清晰规整, 白色背景, 扁平矢量风格, 柔和配色, 细线条, 留白充足, 无照片写实. "
+            "上方一条从左到右的水平时间轴, 标注均匀的训练步刻度: 第0步, 第1步, 第2步 ... 第t步(用小圆点表示每个训练步, 密集排列). "
+            "时间轴下方紧贴一排小的青色缓冲区图标, 表示每步都在『收集失败案例 B_t' 到缓冲区』, 部分步的图标里画一个小红叉代表失败轨迹被收集. "
+            "在时间轴上只有少数几个位置画醒目的青色竖直『触发』标记(比如第10步、第20步附近), 标注『触发条件: 每隔若干步 或 攒够N个失败案例』. "
+            "每个触发标记向下引出一个归因流程小框: 中心青色菱形『大模型根因归因』, 向下分两路: "
+            "左路(橙色)『评估器/提示词侧』, 右路(绿色)『基建侧』. "
+            "左路箭头指向一组提示词文档图标(裁判/提问者/执行者), 箭头线上标注文字『提示词更新』; "
+            "右路箭头指向一个沙箱/工具基建图标, 箭头线上标注文字『skills、工具扩展等』; "
+            "两条箭头线上的标注文字要清晰可见, 直接写在箭头上方, 让每条分支『改什么、怎么改』一目了然. "
+            "两路汇合后使评估器与基建版本号递增: 底部画一条稀疏的版本演进链 『Φ_0 → Φ_1 → Φ_2 → ...』, "
+            "刻意让版本链的节点比上方训练步稀疏很多, 直观体现『t' 增长远慢于训练步 t, 满足 t' ≤ t』. "
+            + _STYLE
         ),
     },
 ]

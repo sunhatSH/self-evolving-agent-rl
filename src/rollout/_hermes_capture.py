@@ -196,7 +196,113 @@ def _install_patches():
 
     run_agent.AIAgent.run_conversation = _wrapped_run
 
-    # Child harvest — only fires if hermes autonomously calls delegate_task.
+    # ── 工具名别名规范化 ────────────────────────────────────────────────────
+    # 根因(2026-09-23 startup 训练): Qwen 基座凭预训练记忆调 bash/run/python 等
+    # 通用 agent 工具名, 但 hermes 真名是 terminal/execute_code 等 → 模型调用 undefined
+    # (日志 256 次 undefined, 主导 rollout 失败). 工具 schema 注入本身正常(已验证
+    # enabled_toolsets=None 时 32 工具含 terminal/execute_code/read_file/...).
+    # 修法: 在工具分发入口把高频误名映射回 hermes 真名, 让惯用名也能命中.
+    # (别名仅覆盖有把握的同义映射; 长尾乱码名 execu/ter/pad 等交给失败案例自演化.)
+    _TOOL_ALIASES = {
+        # 执行 shell 命令 → terminal
+        "bash": "terminal", "run": "terminal", "run_command": "terminal",
+        "run_shell_command": "terminal", "shell": "terminal", "shell_command": "terminal",
+        "run_in_shell": "terminal", "execute_bash": "terminal", "command": "terminal",
+        # 跑代码 → execute_code
+        "python": "execute_code", "run_python": "execute_code", "run_code": "execute_code",
+        "execute": "execute_code", "exec": "execute_code", "code_execution": "execute_code",
+        # 文件操作(hermes 真名已存在, 补常见变体)
+        "create_file": "write_file", "update_file": "write_file", "rewrite_file": "write_file",
+        "delete_file": "write_file", "remove_file": "write_file",
+        "list_files": "search_files", "list_files_in_directory": "search_files",
+        "ls": "search_files", "list_dir": "search_files",
+        # 技能
+        "skill_list": "skills_list",
+    }
+    try:
+        _orig_invoke = run_agent.AIAgent._invoke_tool
+
+        def _aliased_invoke(self, function_name, function_args, *a, **k):
+            # ① tool_search 路由: 模型不确定工具名时调它, 返回全部可用工具的名字+用途,
+            #    让模型据此改调正确工具. 覆盖 hermes 原生 tool_search 覆盖不到的 core 工具.
+            if function_name == "tool_search":
+                avail = [t.get("function", {}) for t in (getattr(self, "tools", None) or [])
+                         if isinstance(t, dict)]
+                lines = []
+                for f in avail:
+                    nm = f.get("name")
+                    if not nm or nm == "tool_search":
+                        continue
+                    desc = (f.get("description") or "").strip().splitlines()
+                    lines.append(f"- {nm}: {desc[0] if desc else ''}"[:160])
+                q = ""
+                if isinstance(function_args, dict):
+                    q = str(function_args.get("query") or function_args.get("q") or "").strip()
+                hint = f"(query: {q})\n" if q else ""
+                return (
+                    "可用工具清单(请从中选择正确的工具名再调用; 常见对应: "
+                    "执行 shell 命令→terminal, 跑代码→execute_code, "
+                    "读文件→read_file, 写文件→write_file, 搜文件→search_files):\n"
+                    + hint + "\n".join(lines)
+                )
+            # ② 别名兜底: 模型直接调惯用名(bash/run/python...) → 映射回 hermes 真名.
+            real = _TOOL_ALIASES.get(function_name)
+            if real is not None:
+                avail = {t.get("function", {}).get("name")
+                         for t in (getattr(self, "tools", None) or [])
+                         if isinstance(t, dict)}
+                if not avail or real in avail:
+                    function_name = real
+            return _orig_invoke(self, function_name, function_args, *a, **k)
+
+        run_agent.AIAgent._invoke_tool = _aliased_invoke
+    except Exception:
+        pass  # hermes 版本无 _invoke_tool → 跳过别名, 不致命
+
+    # ── 注入 tool_search 工具到模型可见列表 ─────────────────────────────────
+    # patch model_tools.get_tool_definitions: 在返回的工具 schema 末尾追加 tool_search,
+    # 让模型看到"不确定工具名时可调 tool_search 查"这个入口(hermes 原生 tool_search
+    # 只覆盖 MCP/plugin 工具, 不含 core; 这里自造一个覆盖全部工具的版本).
+    _TOOL_SEARCH_SCHEMA = {
+        "type": "function",
+        "function": {
+            "name": "tool_search",
+            "description": (
+                "查询当前可用的工具清单及用途。当你不确定某个操作该用哪个工具、"
+                "或调用工具报 undefined 时, 先调用本工具查看正确的工具名, 再改调该工具。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "想做的操作或意图, 如 'run shell command'"}
+                },
+                "required": [],
+            },
+        },
+    }
+    try:
+        import model_tools as _mt
+
+        _orig_get_defs = _mt.get_tool_definitions
+
+        def _get_defs_with_search(*a, **k):
+            defs = _orig_get_defs(*a, **k)
+            try:
+                names = {d.get("function", {}).get("name") for d in defs if isinstance(d, dict)}
+                if "tool_search" not in names:
+                    defs = list(defs) + [_TOOL_SEARCH_SCHEMA]
+            except Exception:
+                pass
+            return defs
+
+        _mt.get_tool_definitions = _get_defs_with_search
+        # run_agent 模块级 re-export 也要覆盖(line 137 `from model_tools import get_tool_definitions`)
+        if hasattr(run_agent, "get_tool_definitions"):
+            run_agent.get_tool_definitions = _get_defs_with_search
+    except Exception:
+        pass  # 无 model_tools → 跳过注入, 别名兜底仍在
+
+
     try:
         from tools import delegate_tool
 
