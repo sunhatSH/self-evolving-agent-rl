@@ -24,7 +24,7 @@
     \label{fig:sandbox_env}
 \end{figure}
 
-\textbf{实现与思路。} 沙箱状态的捕获由观察者负责，采用“执行前注入探针、执行后再次探针、取差集”的三步流程。文件系统探针递归遍历沙箱根目录，记录每个文件的路径、大小、修改时间及内容哈希；系统状态探针通过 \texttt{pip list}、\texttt{ss -lnp}、\texttt{ps aux} 等命令捕获已安装包、监听端口与活跃进程。两次探针的差集即为确定性状态差分，作为奖励评估的客观依据。若状态差分为空（即智能体的执行对沙箱无任何可见变更），系统将该轨迹的奖励短路置 0，从机制上抑制“只声明、无产出”的奖励作弊。沙箱后端实现了统一的注册表接口，本地 Docker 沙箱与云端沙箱通过同一接口接入，训练配置中只需切换后端标识即可零改切换。
+\textbf{实现与思路。} 沙箱状态的捕获由观察者负责，采用“执行前注入探针、执行后再次探针、取差集”的三步流程。文件系统探针递归遍历沙箱根目录，记录每个文件的路径、大小、修改时间及内容哈希；系统状态探针通过 \texttt{pip list}、\texttt{ss -lnp}、\texttt{ps aux} 等命令捕获已安装包、监听端口与活跃进程。两次探针的差集即为确定性状态差分，作为奖励评估的客观依据。沙箱后端实现了统一的注册表接口，本地 Docker 沙箱与云端沙箱通过同一接口接入，训练配置中只需切换后端标识即可零改切换。
 
 \section{跨步状态继承}
 
@@ -86,7 +86,7 @@
     \State $\{\tau_{ij}\} \gets \textproc{Rollout}(\pi_\theta, Q, n)$ \Comment{$S$ 组 $\times\,n$ 条，沙箱内 ReAct}
     \For{\textbf{each} 轨迹 $\tau_{ij}$}
         \State $d_{ij} \gets \textproc{Observe}(\tau_{ij})$ \Comment{执行前后状态差分（确定性取证）}
-        \State $r_{ij} \gets \textproc{Judge}(d_{ij})$ \Comment{冻结裁判据差分打分；空差分短路为 0}
+        \State $r_{ij} \gets \textproc{Judge}(d_{ij})$ \Comment{冻结裁判据状态差分打分}
         \If{$\textproc{IsFailed}(\tau_{ij}, d_{ij}, r_{ij})$} \Comment{失败/异常/自述与差分矛盾}
             \State $\mathcal{B} \gets \mathcal{B} \cup \{(\tau_{ij}, d_{ij}, r_{ij})\}$ \Comment{收集失败案例}
         \EndIf
