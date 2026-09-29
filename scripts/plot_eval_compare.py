@@ -25,46 +25,50 @@ for f in ["Noto Sans CJK SC","Source Han Sans SC","WenQuanYi Zen Hei","Microsoft
 if _ZH: plt.rcParams["font.sans-serif"]=[_ZH]; plt.rcParams["axes.unicode_minus"]=False
 
 labels = ["未训练基座", "回流数据训练", "自进化数据训练\n（本文）"]
-scores = [0.370, 0.428, 0.401]      # coding 平均得分
+scores = [0.370, 0.428, 0.401]      # 平均得分
 diversity = [0.294, 0.312, 0.285]   # 多样性(any_pass_rate 近似)
 colors = ["#9E9E9E", "#607D8B", "#1565C0"]
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12.5, 5))
-x = np.arange(3); w = 0.6
+_FIGDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "master-thesis", "figures"))
 
-# ── 左: coding 得分 ──
+# ── 图一：平均得分（单独）──
+fig1, ax1 = plt.subplots(figsize=(7, 5))
+x = np.arange(3); w = 0.6
 b1 = ax1.bar(x, scores, color=colors, width=w, edgecolor="white", zorder=3)
 for b, s in zip(b1, scores):
     ax1.text(b.get_x()+b.get_width()/2, s+0.003, f"{s:.3f}", ha="center", va="bottom",
              fontsize=11, fontweight="bold")
 ax1.set_xticks(x); ax1.set_xticklabels(labels, fontsize=10.5)
 ax1.set_ylabel("通用任务平均得分"); ax1.set_ylim(0.34, 0.45)
-ax1.set_title("（a）通用任务平均得分", fontsize=12)
+ax1.set_title("通用任务平均得分", fontsize=12)
 ax1.grid(axis="y", alpha=0.3, zorder=0)
 ax1.axhline(scores[0], color="#9E9E9E", lw=1, ls="--", alpha=0.6, zorder=2)
-# 标注提升
 ax1.annotate("", xy=(2, 0.401), xytext=(0, 0.370),
              arrowprops=dict(arrowstyle="->", color="#1565C0", lw=1.3, alpha=0.6))
 ax1.text(1.0, 0.388, "↑ 有提升\n(不如回流)", color="#1565C0", fontsize=9.5, ha="center")
+fig1.tight_layout()
+out_score = os.path.join(_FIGDIR, "fig_fig12b_eval_score_zh.png")
+fig1.savefig(out_score, dpi=185, bbox_inches="tight", facecolor="white")
+plt.close(fig1)
 
-# ── 右: 多样性 ──
+# ── 图二：生成多样性（单独）──
+fig2, ax2 = plt.subplots(figsize=(7, 5))
 b2 = ax2.bar(x, diversity, color=colors, width=w, edgecolor="white", zorder=3)
 for b, s in zip(b2, diversity):
     ax2.text(b.get_x()+b.get_width()/2, s+0.002, f"{s:.3f}", ha="center", va="bottom",
              fontsize=11, fontweight="bold")
 ax2.set_xticks(x); ax2.set_xticklabels(labels, fontsize=10.5)
 ax2.set_ylabel("多样性（任意通过率 any\\_pass\\_rate）"); ax2.set_ylim(0.26, 0.33)
-ax2.set_title("（b）生成多样性", fontsize=12)
+ax2.set_title("生成多样性", fontsize=12)
 ax2.grid(axis="y", alpha=0.3, zorder=0)
 ax2.axhline(diversity[0], color="#9E9E9E", lw=1, ls="--", alpha=0.6, zorder=2)
 ax2.text(2.0, 0.278, "↓ 略降\n(方差坍缩)", color="#C62828", fontsize=9.5, ha="center")
+fig2.tight_layout()
+out_div = os.path.join(_FIGDIR, "fig_fig12b_eval_diversity_zh.png")
+fig2.savefig(out_div, dpi=185, bbox_inches="tight", facecolor="white")
+plt.close(fig2)
 
-fig.tight_layout(pad=2.0)
-out = os.path.join(os.path.dirname(__file__), "..", "master-thesis", "figures",
-                   "fig_fig12b_eval_compare_zh.png")
-out = os.path.abspath(out)
-fig.savefig(out, dpi=185, bbox_inches="tight", facecolor="white")
-plt.close()
-print(f"saved {out}")
+print(f"saved {out_score}")
+print(f"saved {out_div}")
 print(f"  得分: base {scores[0]} < 自进化 {scores[2]} < 回流 {scores[1]}")
 print(f"  多样性: 自进化 {diversity[2]} < base {diversity[0]} < 回流 {diversity[1]}")

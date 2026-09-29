@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Self-Evolving RL for Agentic LLMs</title>
+<meta name="description" content="A self-evolving reinforcement learning system for agentic large language models: autonomous data generation, diff-driven trustworthy rewards, and continual evolution of tasks, policy, evaluator and infrastructure.">
+<style>
+  :root{
+    --bg:#0d1117; --card:#161b22; --border:#232a34;
+    --fg:#e6edf3; --muted:#9aa7b4; --accent:#3b82f6; --accent2:#22c55e;
+    --purple:#a855f7; --teal:#14b8a6;
+    --maxw:960px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+
+  /* Hero */
+  header{padding:72px 0 52px;text-align:center;
+    background:radial-gradient(1200px 400px at 50% -10%,rgba(59,130,246,.18),transparent 70%),
+               radial-gradient(900px 300px at 50% 0,rgba(168,85,247,.10),transparent 60%);
+    border-bottom:1px solid var(--border)}
+  .badge{display:inline-block;font-size:13px;letter-spacing:.5px;color:var(--muted);
+    border:1px solid var(--border);border-radius:999px;padding:5px 14px;margin-bottom:22px;background:var(--card)}
+  h1{font-size:2.35rem;line-height:1.25;margin:.2em 0 .35em;font-weight:800;
+    background:linear-gradient(90deg,#e6edf3,#9db8ff 60%,#c4a5ff);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .authors{font-size:1.05rem;color:var(--fg);margin:6px 0 2px}
+  .affil{color:var(--muted);font-size:.95rem}
+  .cta{margin-top:28px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 20px;border-radius:10px;
+    font-weight:600;font-size:.95rem;border:1px solid var(--border);background:var(--card);color:var(--fg)}
+  .btn:hover{border-color:var(--accent);text-decoration:none;transform:translateY(-1px);transition:.15s}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  section{padding:52px 0;border-bottom:1px solid var(--border)}
+  h2{font-size:1.6rem;font-weight:700;margin:0 0 8px;text-align:center}
+  .sub{color:var(--muted);text-align:center;margin:0 auto 34px;max-width:680px}
+
+  .abstract{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:26px 30px;color:#c9d4e0}
+  .abstract p{margin:0}
+
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+  .feat{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px 22px}
+  .feat h3{margin:0 0 6px;font-size:1.08rem}
+  .feat .ic{font-size:1.5rem;margin-bottom:6px}
+  .feat p{margin:0;color:var(--muted);font-size:.95rem}
+  .feat.b1 h3{color:#7aa2ff}.feat.b2 h3{color:#5ad19a}
+  .feat.b3 h3{color:#c79bff}.feat.b4 h3{color:#5bd0c2}
+
+  figure{margin:26px 0 0;text-align:center}
+  figure img{max-width:100%;border:1px solid var(--border);border-radius:12px;background:#fff;padding:10px}
+  figcaption{color:var(--muted);font-size:.9rem;margin-top:10px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
+
+  .highlight{text-align:center;font-size:1.05rem;color:#c9d4e0;max-width:760px;margin:0 auto}
+  .kpis{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 26px;min-width:150px}
+  .kpi .n{font-size:1.7rem;font-weight:800;color:var(--accent2)}
+  .kpi .l{color:var(--muted);font-size:.86rem;margin-top:2px}
+
+  pre{background:#0a0e14;border:1px solid var(--border);border-radius:12px;padding:18px;overflow:auto;
+    font-size:.86rem;color:#c9d4e0}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace}
+
+  footer{padding:36px 0 60px;text-align:center;color:var(--muted);font-size:.9rem}
+  @media(max-width:720px){
+    h1{font-size:1.7rem}.grid,.two{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="badge">Self-Evolving Reinforcement Learning · Agentic LLMs</span>
+    <h1>A Self-Evolving Reinforcement Learning System<br>for Agentic Large Language Models</h1>
+    <div class="authors">Hao Sun (孙豪)</div>
+    <div class="affil">School of Smart Governance, Renmin University of China</div>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/sunhatSH/self-evolving-agent-rl">★ Code (GitHub)</a>
+      <a class="btn" href="paper_en.pdf">📄 Paper (EN)</a>
+      <a class="btn" href="paper_zh.pdf">📄 论文 (中文)</a>
+    </div>
+  </div>
+</header>
+
+<!-- Abstract -->
+<section id="abstract">
+  <div class="wrap">
+    <h2>Abstract</h2>
+    <p class="sub">Autonomous data, trustworthy rewards, and a self-sustaining loop — without human annotation.</p>
+    <div class="abstract">
+      <p>LLM agents accomplish tasks through multi-step tool use in real environments such as code sandboxes,
+      where reinforcement learning is the dominant path to continuous improvement. Yet RL for interactive agents
+      faces a fundamental bottleneck: <b>both training data and trustworthy rewards are hard to obtain at scale by
+      human effort</b>. Real data accumulates slowly with narrow coverage, and rewards that rely on agent
+      self-reports invite <b>reward hacking</b>. We present a <b>self-evolving RL system</b> that lets agents
+      autonomously generate training data, obtain trustworthy rewards, and produce next-step tasks — extending the
+      object of self-evolution from <i>policy</i> alone to <b>task, policy, evaluator, and infrastructure</b>.
+      Validated end-to-end on Qwen3.5-9B, the full pipeline runs from a small seed set with no external data, and an
+      independent benchmark confirms a real capability gain over the untrained base model.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Key mechanisms -->
+<section id="method">
+  <div class="wrap">
+    <h2>Core Mechanisms</h2>
+    <p class="sub">Four mechanisms turn a fixed-data RL loop into a self-sustaining evolutionary one.</p>
+    <div class="grid">
+      <div class="feat b1">
+        <div class="ic">🔁</div>
+        <h3>Cross-Step Self-Evolving Tasks</h3>
+        <p>Every post-seed task grows on the previous step's <b>real outputs</b>: best-trajectory sandbox state is
+        truly inherited, and a persona-driven questioner generates the next task from summarized experience.</p>
+      </div>
+      <div class="feat b2">
+        <div class="ic">🧩</div>
+        <h3>Multi-Agent Data Generation</h3>
+        <p>An actor solves via ReAct, an observer computes deterministic state diffs, a questioner asks follow-ups —
+        making sampling, attestation, and follow-up fully self-driven.</p>
+      </div>
+      <div class="feat b3">
+        <div class="ic">🛡️</div>
+        <h3>Diff-Driven Reward</h3>
+        <p>A frozen judge scores from <b>real environment state diffs</b>, not self-reports. Pure verbal hacking is
+        provably blocked: any reward gain requires a real change in the environment.</p>
+      </div>
+      <div class="feat b4">
+        <div class="ic">🧬</div>
+        <h3>Evaluator &amp; Infra Self-Evolution</h3>
+        <p>Failure cases are attributed by an LLM to the model side or infra side, then drive incremental prompt
+        revision or distillation of missing capabilities into reusable skills.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Architecture -->
+<section id="architecture">
+  <div class="wrap">
+    <h2>System Architecture</h2>
+    <p class="sub">Three collaborating agents, a code sandbox, a frozen judge, and a GRPO trainer — connected through the RL framework's official injection points.</p>
+    <figure>
+      <img src="assets/arch.png" alt="System architecture">
+    </figure>
+    <div class="two">
+      <figure>
+        <img src="assets/selfevolve.png" alt="Cross-step self-evolution loop">
+        <figcaption>Cross-step self-evolution: sandbox state inherited, next task generated from summarized experience.</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/multiagent.png" alt="Multi-agent data generation">
+        <figcaption>Actor / observer / questioner chained on one sandbox session.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- Results -->
+<section id="results">
+  <div class="wrap">
+    <h2>Results</h2>
+    <p class="sub">One end-to-end run on Qwen3.5-9B, observed along multiple dimensions.</p>
+    <div class="two">
+      <figure>
+        <img src="assets/reward.png" alt="Reward over training steps">
+        <figcaption>Reward mean over steps: self-generated data (ours) tracks and slightly exceeds the replay-data baseline.</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/eval_score.png" alt="Capability evaluation">
+        <figcaption>Independent benchmark: self-evolution model (0.401) clearly above untrained base (0.370).</figcaption>
+      </figure>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="n">0.40</div><div class="l">eval score vs 0.37 base</div></div>
+      <div class="kpi"><div class="n">50</div><div class="l">RL steps, seed-only</div></div>
+      <div class="kpi"><div class="n">4-dim</div><div class="l">task·policy·evaluator·infra</div></div>
+      <div class="kpi"><div class="n">0</div><div class="l">external data beyond seed</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Quickstart -->
+<section id="code">
+  <div class="wrap">
+    <h2>Get Started</h2>
+    <p class="sub">Standard GRPO on verl 0.8.0 (pip-installed, no fork), custom rollout via official injection points.</p>
+    <pre><code># install (src-layout: src/ + agents/)
+pip install -e ".[dev]"
+
+# CPU unit tests
+pytest
+
+# 4-GPU debug smoke (rollout → reward → GRPO update), run in tmux
+tmux new -d -s smoke 'bash scripts/train_4gpu.sh configs/run/agent_rl_4gpu.yaml'</code></pre>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/sunhatSH/self-evolving-agent-rl">View on GitHub</a>
+      <a class="btn" href="paper_en.pdf">Read the Paper</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>© 2026 Hao Sun · Renmin University of China ·
+    <a href="https://github.com/sunhatSH/self-evolving-agent-rl">sunhatSH/self-evolving-agent-rl</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
