@@ -242,8 +242,8 @@ class BadcaseEvolver:
         if self._meta_llm is not None:
             return self._meta_llm
         try:
-            from agents.base import get_observer
-            self._meta_llm = get_observer()
+            from agents.base import resolve_observer_client
+            self._meta_llm = resolve_observer_client()
             return self._meta_llm
         except Exception as exc:  # noqa: BLE001
             logger.warning("[badcase] meta-LLM unavailable, attribution skipped: %s", exc)

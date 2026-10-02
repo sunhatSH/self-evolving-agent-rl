@@ -262,15 +262,19 @@ def select_groups(
     selected_keys = []
     for uid in selected_uids:
         selected_keys.extend(groups[uid])
-    # verl make_iterator 硬约束: 训练轨迹总数须能被 (mini_batch × DP) 整除, 否则断言崩.
-    # 变长组使总数不规整, 故向下截断到 align 的整数倍(丢零头轨迹; 任务存活集不受影响).
-    # align 取 mini_batch_align(调用方按 ppo_mini_batch_size×DP 传入); 缺省回退 group_size.
-    if mini_batch_align and mini_batch_align > 0 and selected_keys:
-        n_keep = (len(selected_keys) // mini_batch_align) * mini_batch_align
+    # verl make_iterator 硬约束: 训练轨迹总数须能被 mini_batch 整除, 否则断言崩.
+    # 纯自进化下组数逐 step 变化, 选后轨迹可能不足一个 mini_batch_align——此时
+    # 退化为 group_size(8) 对齐(丢零头), 保证至少能训; _balance_batch 的 padding
+    # 再补到 mini_batch×DP 的整倍数(合成 no-op 样本, 不产生梯度)。
+    align = mini_batch_align if mini_batch_align and mini_batch_align > 0 else group_size
+    if len(selected_keys) < align:
+        align = group_size
+    if align > 0 and selected_keys:
+        n_keep = (len(selected_keys) // align) * align
         if n_keep < len(selected_keys):
             print(
                 f"[select] align: {len(selected_keys)} rows → {n_keep} "
-                f"(truncate to multiple of mini_batch_align={mini_batch_align})",
+                f"(truncate to multiple of align={align})",
                 flush=True,
             )
             selected_keys = selected_keys[:n_keep]
@@ -293,6 +297,7 @@ if CustomPPOTrainerSync is not None:
         def __init__(self, config):
             super().__init__(config)
             self._cross_step_seeds: list = []  # 跨 step seeds(Questioner 产的新 query)
+            self._n_submitted: int = 0        # 本步实际提交的 prompt 数(纯自进化下逐 step 变化)
             self._should_stop: bool = False  # 训练终止标志(坍缩/崩溃触发)
             # 失败案例自演化控制器（对应论文第 4.6 节）
             try:
@@ -343,55 +348,42 @@ if CustomPPOTrainerSync is not None:
                 metrics["sys/should_stop"] = 1.0
 
         def _add_batch_to_generate(self):
-            """跨 step: step 1 从 dataloader, step 2+ 用 Questioner 产的新 query + dataloader 补齐.
+            """跨 step: step 1 从 dataloader, step 2+ 用 Questioner 产的新 query(纯自进化, 不补齐).
 
-            verl 约束: num_prompts 必须是 gen_batch_size 的整数倍.
-            故补齐数向上取整到 gen_batch_size 的倍数.
+            采样量语义(16 卡示例, 初始 S=128/N=64):
+              step 1: dataloader 取 S=128 prompt → rollout 128×8 条.
+              step 2+: 只提交 cross-step seeds = 全部任务存活组 R, 有多少提交多少,
+                不从 dataloader 补齐——存活组不足时本轮就采 R 组(S=R×n 条),
+                由 _step_once 的动态 sample batch_size 适配(见 self._n_submitted).
             """
             train_batch_size = self.config.data.train_batch_size
-            gen_batch_size = self.config.data.get("gen_batch_size", None) or train_batch_size
             if self._cross_step_seeds:
-                # step 2+: 用跨 step seeds(Questioner 产的新 query)构造 batch
+                # step 2+: 只用 cross-step seeds(Questioner 产的新 query), 不补齐
                 try:
                     from agents.cross_step import build_cross_step_batch
                     from verl.utils import tensordict_utils as tu
                     n_cross = len(self._cross_step_seeds)
-                    print(f"[cross-step] step {self.global_steps}: {n_cross} cross-step seeds", flush=True)
-
-                    # cross-step seeds 不够 train_batch_size → 用 dataloader 补齐
-                    if n_cross < train_batch_size:
-                        n_need = train_batch_size - n_cross
-                        # 向上取整到 gen_batch_size 的倍数 (verl 约束)
-                        n_need = ((n_need + gen_batch_size - 1) // gen_batch_size) * gen_batch_size
-                        print(f"[cross-step] supplementing {n_need} from dataloader (cross-step {n_cross} < train_batch {train_batch_size}, rounded to gen_batch {gen_batch_size})", flush=True)
-                        # 先取 dataloader 的补齐部分
-                        supplement_batch = self._next_train_batch(num_prompts=n_need)
-                        # 再取 cross-step seeds 部分
-                        cross_batch_dict = build_cross_step_batch(self._cross_step_seeds)
-                        if cross_batch_dict is not None:
-                            cross_batch = tu.get_tensordict(cross_batch_dict)
-                            tu.assign_non_tensor_data(cross_batch, "global_steps", self.global_steps)
-                            # 合并: cross-step + dataloader
-                            batch = tu.concat_tensordict([cross_batch, supplement_batch])
-                            _, rollout_metrics = self._submit_batch_to_rollout(batch)
-                            print(f"[cross-step] step {self.global_steps}: submitted {n_cross} cross-step + {n_need} dataloader = {n_cross + n_need}", flush=True)
-                            return rollout_metrics
-                    else:
-                        # cross-step seeds 够, 直接用(取前 train_batch_size 个)
-                        cross_batch_dict = build_cross_step_batch(self._cross_step_seeds[:train_batch_size])
-                        if cross_batch_dict is not None:
-                            batch = tu.get_tensordict(cross_batch_dict)
-                            tu.assign_non_tensor_data(batch, "global_steps", self.global_steps)
-                            _, rollout_metrics = self._submit_batch_to_rollout(batch)
-                            print(f"[cross-step] step {self.global_steps}: submitted {train_batch_size} cross-step seeds", flush=True)
-                            return rollout_metrics
+                    print(f"[cross-step] step {self.global_steps}: {n_cross} cross-step seeds (no supplement)", flush=True)
+                    cross_batch_dict = build_cross_step_batch(self._cross_step_seeds)
+                    if cross_batch_dict is not None:
+                        batch = tu.get_tensordict(cross_batch_dict)
+                        tu.assign_non_tensor_data(batch, "global_steps", self.global_steps)
+                        # CustomPPOTrainerSync._submit_batch_to_rollout 返回 (n, rollout_metrics);
+                        # 只留 prompt 数, rollout_metrics 透传给 step() 层。
+                        self._n_submitted, _rollout_metrics = self._submit_batch_to_rollout(batch)
+                        print(
+                            f"[cross-step] step {self.global_steps}: submitted {self._n_submitted} "
+                            f"cross-step seeds (next S = survived R, no dataloader supplement)",
+                            flush=True,
+                        )
+                        return _rollout_metrics or {}
                 except Exception as exc:  # noqa: BLE001 -- fallback to dataloader
                     print(f"[cross-step] cross-step batch failed ({exc}), fallback to dataloader", flush=True)
 
             # step 1 or fallback: 从 dataloader 取
             batch = self._next_train_batch()
-            _, rollout_metrics = self._submit_batch_to_rollout(batch)
-            return rollout_metrics
+            self._n_submitted, _rollout_metrics = self._submit_batch_to_rollout(batch)
+            return _rollout_metrics or {}
 
         def _step_once(
             self,
@@ -403,10 +395,14 @@ if CustomPPOTrainerSync is not None:
             with marked_timer("gen", timing_raw, color="red"):
                 self.on_sample_begin()
                 if batch is None:
+                    # 纯自进化: cross-step seeds 数量逐 step 变化(=上轮存活组 R),
+                    # sample 的等待数跟随本步实际提交数, 而非固定的 train_batch_size
+                    # (等多了会因 prompt 不够而永久阻塞)。
+                    effective_batch_size = getattr(self, "_n_submitted", 0) or sample_batch_size
                     batch, off_policy_metrics = self.replay_buffer.sample(
                         global_steps=self.global_steps,
                         partition_id="train",
-                        batch_size=sample_batch_size,
+                        batch_size=effective_batch_size,
                     )
                     metrics.update(off_policy_metrics)
                 batch.extra_info["temperature"] = self.config.actor_rollout_ref.rollout.temperature
@@ -429,6 +425,8 @@ if CustomPPOTrainerSync is not None:
                 batch = self._compute_advantage(batch, metrics=metrics)
 
             # ★ 训练监控: 计算坍缩指标写入 metrics ★
+            # 此处 batch 是【选组前】全体(S 组全部轨迹)——全体系数与无选组的
+            # baseline 口径一致, critic/score/* 是选组后子集, 两者不可混比。
             try:
                 from trainer.agent_rl_runner import compute_std_metrics
                 std_metrics = compute_std_metrics(batch)
@@ -436,9 +434,11 @@ if CustomPPOTrainerSync is not None:
                     metrics.update(std_metrics)
                     print(
                         f"[monitor] step {self.global_steps}: "
+                        f"full_score_mean={std_metrics.get('sys/reward_mean', -1):.4f} "
                         f"reward_std={std_metrics.get('sys/reward_std', -1):.4f} "
                         f"adv_std={std_metrics.get('sys/advantage_std', -1):.4f} "
-                        f"group_std={std_metrics.get('sys/group_reward_std', -1):.4f}",
+                        f"group_std={std_metrics.get('sys/group_reward_std', -1):.4f} "
+                        f"num_groups={std_metrics.get('sys/num_groups', -1):.0f}",
                         flush=True,
                     )
             except Exception as exc:  # noqa: BLE001
@@ -463,6 +463,22 @@ if CustomPPOTrainerSync is not None:
                     drop_below=0.5,
                     mini_batch_align=mini_batch_align,
                 )
+            # 选组前后对照: full_*(全体, baseline 口径) 已在上面的 [monitor] 打印并写入
+            # metrics; 此处补记选组后子集的均值差, 量化选组偏置(|adv| 选组偏好高低混合组,
+            # 子集均值天然低于全体)。critic/score/* 本身就是选组后口径, 由 verl 上报。
+            try:
+                sel_metrics = compute_std_metrics(batch)
+                if sel_metrics:
+                    n_full = std_metrics.get("sys/num_groups", 0) if std_metrics else 0
+                    n_sel = sel_metrics.get("sys/num_groups", 0)
+                    print(
+                        f"[select] score bias: full={std_metrics.get('sys/reward_mean', -1):.4f} "
+                        f"(S={n_full:.0f} groups) → selected={sel_metrics.get('sys/reward_mean', -1):.4f} "
+                        f"(N={n_sel:.0f} groups)",
+                        flush=True,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                print(f"[select] score-bias metrics failed: {exc}", flush=True)
             # 跨步追问用【任务存活集】(>=1 有效轨迹的组), 与"能否进训练"解耦:
             # 残缺组不进训练, 但只要出过有效结果, 其任务/沙箱仍进下一轮.
             self._survived_uids = task_survived_uids
@@ -504,9 +520,10 @@ if CustomPPOTrainerSync is not None:
                 )
                 return batch
 
-            # ★ 跨 step: 对存活的 R 组(淘汰后)每组产新 seed → 下一轮 S=R ★
-            # 用淘汰前的全 keys(full_batch_keys), 限定到存活 uids(survived_uids).
+            # ★ 跨 step: 对全部任务存活组(R)每组产新 seed → 下一轮 S=R ★
+            # 用淘汰前的全 keys(full_batch_keys), 限定到任务存活 uids(_survived_uids).
             # 每个存活组: 取最优轨迹 → observer LLM 概括 + 沙箱快照 → Questioner 产新 query.
+            # 不设 max_seeds 上限: 16 卡初始 S=128, 存活组可达百余, 下一轮采样 = 存活数×8.
             try:
                 from agents.cross_step import generate_cross_step_seeds
                 survived = getattr(self, "_survived_uids", [])

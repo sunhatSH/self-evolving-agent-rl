@@ -81,7 +81,7 @@ actor_rollout_ref:
       remote_agent:
         gateway_count: 8
         num_session_workers: 8
-        session_timeout: 2400
+        session_timeout: 2400            # 外层 wall-clock; Hermes 沙箱内层 1800s 先触发(实际生效 1800)
         harness_log_dir: ${oc.env:HARNESS_LOG_DIR,logs/harness}
         harness_log_save_mode: all
         all_failed_policy: skip
@@ -152,7 +152,8 @@ algorithm:
 trainer:
   nnodes: ${oc.decode:${oc.env:NNODES,2}}          # oc.decode 把 env 字符串 "2" 解码成 int（否则 verl 里 [gpus]*nnodes 报 can't multiply seq by str）
   n_gpus_per_node: ${oc.decode:${oc.env:N_GPUS_PER_NODE,8}}
-  total_epochs: 1
+  total_epochs: 2               # verl fit() 在 current_epoch >= total_epochs 时退出; 3200 池 / 128 per-step = 25 步/epoch,
+                                # 跑满 50 步需 2 个 epoch (dataloader 耗尽自动重开)
   total_training_steps: 50             # 自进化 50-step 训练 (coding 3200 条 = 50×64)
   save_freq: 10                        # 每 10 步存一次 checkpoint
   test_freq: -1                        # 离线评测，关在线验证

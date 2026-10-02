@@ -110,6 +110,9 @@ def _score_all_slots(
                 rep = ObservationReport(
                     actor_trajectory=flatten_trajectory(t.messages),
                     final=[{"path": "(assistant reply)", "kind": "text", "content_excerpt": last_reply}],
+                    # 文本兜底通道: 环境零产出、只有回复文本。judge 据此区分
+                    # "纯问答任务的合格回答"与"该交付文件的任务靠反问澄清敷衍"。
+                    has_effect=False,
                 )
                 verdict = score_followup(query=query, report=rep, judge=reward_judge)
             else:

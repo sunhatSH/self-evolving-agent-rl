@@ -101,6 +101,12 @@ def score_followup(
         "planning": _clamp01(verdict.get("planning", _TRAJ_DEFAULTS["planning"])),
         "consistency": _clamp01(verdict.get("consistency", 0.0)),
         "recovery": _clamp01(verdict.get("recovery", _TRAJ_DEFAULTS["recovery"])),
+        # 证据回传(reward_extra_info → TQ → cross_step): observer_report 是跨步种子
+        # 生成的输入, source_data 是新任务生成的真实文件清单锚点。缺失会让
+        # _generate_new_task 全部回退(0 new tasks 的根因, 2026-10-02)。
+        "observer_report": (report.state_diff or "")[:8000],
+        "source_data": (getattr(report, "source_data", "") or "")[:8000],
+        "hermes_log": (getattr(report, "hermes_log", "") or "")[:8000],
         "judge_error": judge_error,
         "discard": judge_error,  # 1.0 -> caller sets reward=None (masked, not scored 0)
     }

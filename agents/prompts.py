@@ -19,9 +19,78 @@ serialized compactly so the downstream model sees the same evidence.
 from __future__ import annotations
 
 import json
+import os
+import time
 from typing import Any
 
 from agents.schema import ObservationReport, Persona
+
+
+# --------------------------------------------------------------------------- #
+# Badcase-evolve prompt patches (动态读入, 训练中热更新)                      #
+# --------------------------------------------------------------------------- #
+# 失败案例自演化(badcase_evolve)每 N 步产 prompt patch 落盘到
+# logs/badcase_evolve/prompt_patches.json。这里提供【动态读取】入口: 每次
+# 调用时检查 mtime, 文件变了才重新加载(每步 evolve 后下一次调用自动生效),
+# 不在 import 时固定读入——训练中途产生的 patch 无需重启即可进入 judge/
+# questioner 的系统提示词。
+_BADCASE_PATCH_FILE = os.environ.get(
+    "BADCASE_PATCH_FILE", "logs/badcase_evolve/prompt_patches.json"
+)
+_badcase_cache: dict[str, Any] = {"mtime": 0.0, "patches": [], "loaded": False, "mtime_checked": 0.0}
+_BADCASE_RELOAD_INTERVAL_S = 30.0  # mtime 检查节流(避免每条轨迹 stat 一次)
+
+
+def load_badcase_prompt_patches(force: bool = False) -> list[str]:
+    """读取 badcase evolve 积累的 prompt patch 文本列表(带 mtime 缓存)。
+
+    返回去重后的 patch 文本(每个是一段增量规则, 调用方拼到系统提示词末尾)。
+    文件缺失/损坏/为空时返回 []——消费方无感知降级。线程安全靠 GIL 的
+    dict 赋值原子性; 最坏情况是并发读到半新半旧, 下次调用自愈。
+    """
+    global _badcase_cache
+    now = time.time()
+    if not force and _badcase_cache["loaded"] and now - _badcase_cache["mtime_checked"] < _BADCASE_RELOAD_INTERVAL_S:
+        return _badcase_cache["patches"]
+
+    try:
+        mt = os.path.getmtime(_BADCASE_PATCH_FILE)
+    except OSError:
+        _badcase_cache.update({"mtime": 0.0, "patches": [], "loaded": True, "mtime_checked": now})
+        return []
+
+    if _badcase_cache["loaded"] and mt == _badcase_cache["mtime"]:
+        _badcase_cache["mtime_checked"] = now
+        return _badcase_cache["patches"]
+
+    try:
+        with open(_BADCASE_PATCH_FILE, encoding="utf-8") as f:
+            raw = json.load(f)
+        seen: set[str] = set()
+        patches: list[str] = []
+        for item in raw if isinstance(raw, list) else []:
+            if not isinstance(item, dict):
+                continue
+            text = str(item.get("patch") or "").strip()
+            if text and text not in seen:
+                seen.add(text)
+                patches.append(text)
+    except (OSError, ValueError):
+        patches = []
+
+    _badcase_cache.update({"mtime": mt, "patches": patches, "loaded": True, "mtime_checked": now})
+    return patches
+
+
+def badcase_patch_block(header: str) -> str:
+    """把 patches 拼成提示词块(带 header); 无 patch 时返回空串(零开销)。"""
+    patches = load_badcase_prompt_patches()
+    if not patches:
+        return ""
+    lines = [f"\n\n# {header} (从失败案例自演化动态积累的增量规则, 与上面规则同等效力)"]
+    for i, p in enumerate(patches, 1):
+        lines.append(f"{i}. {p}")
+    return "\n".join(lines)
 
 # --------------------------------------------------------------------------- #
 # O6  Observer (no persona, objective)                                        #
@@ -306,6 +375,19 @@ def _report_block(r: ObservationReport) -> str:
         "discrepancies": r.discrepancies,
         "file_tree": r.file_tree,
     }
+    # 文本兜底通道的明示: has_effect=False 且仅有 "(assistant reply)" 交付物 =
+    # 环境零产出、只有回复文本。judge/questioner 据此压分——防止"该交付文件
+    # 的任务靠反问澄清拿高分"的 reward hacking。
+    if not r.has_effect and r.final and all(
+        (f.get("path") == "(assistant reply)") for f in r.final if isinstance(f, dict)
+    ):
+        payload["text_only_fallback"] = (
+            "NOTE: the agent produced ZERO files/system changes this turn. The only "
+            "'deliverable' is its chat reply (text-only fallback). If the task asked "
+            "for files/artifacts/analysis outputs, a clarifying question or a prose "
+            "answer WITHOUT the requested deliverable is NOT acceptable — score "
+            "completion low and do not treat the reply as a deliverable."
+        )
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
@@ -348,7 +430,12 @@ def build_questioner_prompt(
     emotional style (P1 TODO from CLAUDE.md).
     """
     tone_guidance = _TONE_GUIDANCE.get(persona.tone, _TONE_GUIDANCE["neutral"])
-    system = QUESTIONER_SYSTEM + "\n\n" + tone_guidance
+    system = (
+        QUESTIONER_SYSTEM
+        + "\n\n"
+        + tone_guidance
+        + badcase_patch_block("Questioner incremental rules (self-evolved)")
+    )
 
     # Surface a genuine red flag at the TOP of the user turn so it is impossible
     # to miss — the baseline failure mode was the questioner ending the session
@@ -447,7 +534,13 @@ CORRECTNESS_RUBRIC = (
     "『真做没做到』)。\n\n"
     "## Return\n"
     'Return the JSON object: {"correctness": <0~1>, "correctness_reason": "<why>", '
-    '"consistency": <0~1>, "consistency_reason": "<why>"}.'
+    '"consistency": <0~1>, "consistency_reason": "<why>"}.\n\n'
+    "## 硬性规则 — 零环境产出 (ZERO-DIFF OVERRIDE)\n"
+    "若 ENVIRONMENT DIFF 为空(零文件变更)且源输入文件在沙箱中【不存在】或 agent 全程没有"
+    "读取/处理任何输入文件: 无论 agent 的文字回复多么详尽流畅, correctness 与 consistency "
+    "一律 ≤ 0.1。理由: 没有真实证据支撑的'分析/报告'只能是编造——引用的数据、引用的原文"
+    "都无从谈起。纯问答任务(不需要文件的任务)除外, 但判断依据是【任务本身不涉及数据文件】, "
+    "不是 agent 是否写了长回复。"
 )
 
 

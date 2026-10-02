@@ -727,6 +727,12 @@ def compute_score(
     if diff_block:
         main_rubric += diff_block
 
+    # Badcase-evolve 动态 patches(mtime 缓存, 训练中途 evolve 后下次调用即生效):
+    # 失败案例自演化归纳出的增量判分规则, 与基础 rubric 同等效力。
+    from agents.prompts import badcase_patch_block
+
+    main_rubric += badcase_patch_block("Judge incremental rules (self-evolved)")
+
     # stdout 类输出（hermes.log）：agent 的对话流 + terminal 工具输出。stdout-only 任务
     # （"运行并报告"）此前判不准的根因是 observer 只看文件 diff、看不到运行结果。现在
     # observer 在沙箱关闭前读 /tmp/hermes.log 写进 reward_info["hermes_log"]，这里拼进
