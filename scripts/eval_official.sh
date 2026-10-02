@@ -32,6 +32,7 @@ declare -A MODEL_PATHS=(
   ["base"]="/mnt/afs_toolcall/sunhao4/models/Qwen3.5-9B"
   ["baseline"]="$ROOT_DIR/eval/.tmp/merged_baseline"
   ["kl"]="$ROOT_DIR/eval/.tmp/merged_kl"
+  ["self_evolving_step50"]="/mnt/afs_toolcall/sunhao4/workspace/agentic_cl_research/eval/.tmp/merged_self_evolving_step50"
 )
 
 # 要评的模型（默认全部，或命令行指定）
