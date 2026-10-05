@@ -86,9 +86,9 @@ pdftitle={\@title},
 pdfauthor={\@author},
 pdfsubject={中国人民大学学位论文}}
 }
-\setmainfont{Liberation Serif}
-\setsansfont{Liberation Sans}
-\setmonofont{Liberation Mono}
+\setmainfont{DejaVu Serif}
+\setsansfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}
 \xeCJKsetup{AutoFakeSlant={true}}
 \xeCJKsetup{AutoFakeBold={true}}
 \setCJKmainfont{simsun.ttc}

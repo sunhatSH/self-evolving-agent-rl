@@ -31,10 +31,10 @@
 
 % ── 字体覆盖（模板 cls 硬编码 Windows 字体 PostScript 名，Linux 上无此字体；
 %    IfFontExistsTF 在某些 fontspec 版本下仍触发 metric 生成调 mf 失败 → Emergency stop。
-%    直接用 Liberation（Windows 字体度量兼容替代）+ DejaVu 兜底，绕过 cls 的硬编码。）──
-\setmainfont{Liberation Serif}
-\setsansfont{Liberation Sans}
-\setmonofont{Liberation Mono}
+%    直接用 DejaVu（系统可用），绕过 cls 的硬编码。）──
+\setmainfont{DejaVu Serif}
+\setsansfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}
 
 % ── 图目录 / 表目录名 ──
 \renewcommand{\listfigurename}{图目录}
