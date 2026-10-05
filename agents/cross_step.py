@@ -271,26 +271,26 @@ def _observer_llm_summary(
             client = resolve_observer_client()
         except Exception as exc:  # noqa: BLE001
             print(f"[cross-step] observer client unavailable: {exc}", flush=True)
-            return f"执行概括不可用(LLM 未配置)。上轮轨迹摘要: {trajectory_text[:500]}"
+            return f"Execution summary unavailable (LLM not configured). Last-turn trajectory excerpt: {trajectory_text[:500]}"
 
-    prompt = f"""请概括以下 agent 轨迹的执行情况, 用一段话描述 agent 做了什么、产出了什么、还有什么没完成.
-不要直接复述轨迹, 要概括. 这段概括将用于生成下一轮追问.
+    prompt = f"""Summarize the execution of the following agent trajectory in one paragraph: what the agent did, what it produced, and what remains unfinished.
+Do not restate the trajectory verbatim — summarize. This summary will be used to generate the next turn's follow-up query.
 
-=== Observer 状态差分报告(环境真实变更) ===
+=== Observer state-diff report (real environment changes) ===
 {observer_report}
 
-=== Agent 轨迹(执行过程) ===
+=== Agent trajectory (execution process) ===
 {trajectory_text}
 """
     messages = [
-        {"role": "system", "content": "你是一个客观的执行概括器. 用一段话概括 agent 的执行情况."},
+        {"role": "system", "content": "You are an objective execution summarizer. Summarize the agent's execution in one paragraph."},
         {"role": "user", "content": prompt},
     ]
     try:
         return client.chat(messages, max_tokens=512)
     except Exception as exc:  # noqa: BLE001
         print(f"[cross-step] observer LLM summary failed: {exc}", flush=True)
-        return f"执行概括失败({exc})。上轮轨迹摘要: {trajectory_text[:500]}"
+        return f"Execution summary failed ({exc}). Last-turn trajectory excerpt: {trajectory_text[:500]}"
 
 def _questioner_new_query(
     summary: str,

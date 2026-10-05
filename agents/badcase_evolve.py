@@ -274,11 +274,14 @@ class BadcaseEvolver:
             {
                 "role": "system",
                 "content": (
-                    "你是一个自进化强化学习系统的诊断专家。"
-                    "你的任务是分析训练中出现的失败案例，判断根因是『模型问题』还是『基建问题』，"
-                    "并给出针对性的修复建议。\n"
-                    "注意：归因必须综合考虑任务意图、轨迹、环境证据，不能仅凭错误码判断。"
-                    "例如 OOM 可能是基建内存不足，也可能是模型选了暴力全量搜索的低效方案。"
+                    "You are a diagnostic expert for a self-evolving RL system. "
+                    "Your task is to analyze failure cases from training and decide "
+                    "whether the root cause is a MODEL issue or an INFRASTRUCTURE "
+                    "issue, then give targeted repair suggestions.\n"
+                    "Note: the attribution must weigh the task intent, the trajectory, "
+                    "and the environment evidence together — never judge by error code "
+                    "alone. E.g. an OOM may be insufficient infrastructure memory, or "
+                    "the model choosing a brute-force full-search plan."
                 ),
             },
             {"role": "user", "content": prompt},
@@ -369,40 +372,40 @@ class BadcaseEvolver:
 def _build_attribution_prompt(case: FailureCase) -> str:
     diff_summary = (
         json.dumps(case.state_diff, ensure_ascii=False)[:500]
-        if case.state_diff else "（空：无任何文件/系统状态变更）"
+        if case.state_diff else "(empty: no file/system state changes)"
     )
-    return f"""## 失败案例归因请求
+    return f"""## Failure-case attribution request
 
-**任务描述**
-{case.raw_prompt or "（无）"}
+**Task description**
+{case.raw_prompt or "(none)"}
 
-**轨迹摘要**（截断至 {_MAX_TRAJ_CHARS} 字符）
-{case.trajectory_text or "（无）"}
+**Trajectory summary** (truncated to {_MAX_TRAJ_CHARS} chars)
+{case.trajectory_text or "(none)"}
 
-**观察者状态差分**（截断至 {_MAX_REPORT_CHARS} 字符）
-{case.observer_report or "（无）"}
+**Observer state diff** (truncated to {_MAX_REPORT_CHARS} chars)
+{case.observer_report or "(none)"}
 
-**状态差分详情**（变更摘要）
+**State diff details** (change summary)
 {diff_summary}
 
-**执行报错**
-{case.agent_error or "（无）"}
+**Execution error**
+{case.agent_error or "(none)"}
 
-**工具调用日志片段**
-{case.hermes_log or "（无）"}
+**Tool-call log excerpt**
+{case.hermes_log or "(none)"}
 
-**得分**：{case.reward:.3f}（交付物数量：{case.deliverable_count}）
+**Score**: {case.reward:.3f} (deliverable count: {case.deliverable_count})
 
 ---
 
-请按如下 JSON 格式回复（只输出 JSON，不要加任何解释文字）：
+Reply in the following JSON format (output ONLY the JSON, no explanations):
 
 ```json
 {{
   "attribution": "model" | "infra" | "unclear",
-  "reasoning": "综合任务意图、轨迹、环境证据的归因理由（2-4句话）",
-  "prompt_patch": "若为模型问题，此处写对 judge/questioner/actor 提示词的增量修订建议（1-3条具体规则）；若非模型问题则留空",
-  "infra_patch": "若为基建问题，此处写基建扩展项（格式：type:tool/dep/timeout/harness + 具体内容）；若非基建问题则留空"
+  "reasoning": "attribution rationale weighing task intent, trajectory, and environment evidence (2-4 sentences)",
+  "prompt_patch": "if a model issue: incremental prompt-revision rules for judge/questioner/actor (1-3 concrete rules); otherwise leave empty",
+  "infra_patch": "if an infrastructure issue: the infra extension item (format: type:tool/dep/timeout/harness + specifics); otherwise leave empty"
 }}
 ```"""
 
