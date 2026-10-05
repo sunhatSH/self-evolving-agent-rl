@@ -293,7 +293,7 @@ $\rho$ 恒不小于 1（前 $N$ 大的均值必不小于总体均值），且组
 \Require 失败案例缓冲 $\mathcal{B}$，当前评估器/基建 $\Phi$，触发周期 $T_e{=}10$ 步，容量 $C{=}20$
 \Ensure 更新后的评估器/基建 $\Phi'$
 \ForEach{本步产生的轨迹 $\tau$}
-    \If{$\textproc{IsFailed}(\tau)$} \Comment{执行失败/奖励异常/自述与差分矛盾}
+    \If{$\textproc{IsFailed}(\tau)$} \Comment{执行失败/奖励异常/维度分与总分偏差大}
         \State $\mathcal{B} \gets \mathcal{B} \cup \{\textproc{Evidence}(\tau)\}$ \Comment{连同任务、轨迹、差分、报错留存}
     \EndIf
 \EndFor
