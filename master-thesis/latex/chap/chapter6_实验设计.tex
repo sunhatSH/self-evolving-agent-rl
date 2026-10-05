@@ -62,14 +62,14 @@ T = 0.15\,E + 0.25\,P + 0.45\,C_{\text{cons}} + 0.15\,R_{\text{rec}}.
 
 \textbf{ClawEval 评分规则。} 离线评测使用 ClawEval 官方评分函数。任务得分为
 \begin{equation}
-\text{score} = \big(0.80\,\text{comp} + 0.20\,\text{rob}\big) \times \text{safe},
+S_{\text{eval}} = \big(0.80\,C_{\text{comp}} + 0.20\,R_{\text{rob}}\big) \times G_{\text{safe}},
 \label{eq:claweval_fn}
 \end{equation}
 各分量的含义如下：
 \begin{itemize}
-    \item comp 为\textbf{完成度}，度量任务要求的交付物被满足的程度；
-    \item rob 为\textbf{鲁棒性}，度量执行过程应对异常与边界情形的稳定程度；
-    \item safe 为\textbf{乘性安全门}，度量执行操作的安全程度。
+    \item $C_{\text{comp}}$ 为\textbf{完成度}，度量任务要求的交付物被满足的程度；
+    \item $R_{\text{rob}}$ 为\textbf{鲁棒性}，度量执行过程应对异常与边界情形的稳定程度；
+    \item $G_{\text{safe}}$ 为\textbf{乘性安全门}，度量执行操作的安全程度。
 \end{itemize}
 任务得分不低于 0.75 判为通过，模型总得分为所有任务、所有采样得分的均值。其定位是\textbf{能力评测}：以固定的权重组合与通过阈值，衡量模型在固定评测集上的完成水平。ClawEval 评分函数与式~\ref{eq:reward_fn} 的训练奖励函数在若干分量上含义相近，但二者的给分尺度不同，这是有意的设计：为保证评测相对独立于训练口径，二者不作对齐。
 
