@@ -68,6 +68,7 @@
     \item 策略 KL 散度（actor/ppo\_kl）：策略偏离参考策略的程度。
     \item 训练损失（actor/pg\_loss）：出现 NaN／Inf 表示训练崩溃。
     \item 存活组数（sys/num\_groups）：淘汰后的存活组数。
+    \item 梯度范数（actor/grad\_norm）：参数梯度的整体幅度，来自反向传播时的梯度裁剪统计，其数量级判读见第四章表~\ref{tab:grad_norm_guide}。
 \end{itemize}
 
 第四章给出了监控指标与判据类型，其中的具体阈值属实验配置。本文实验中各判据的阈值取值如表~\ref{tab:stop_thresholds} 所示：任一判据触发时，系统跳过跨步任务生成，训练循环在下一步检测到终止标志后退出。这些指标随训练步的实际变化曲线与终止判据的触发情况，在第~\ref{sec:exp_stability} 节结合训练实验一并给出。
@@ -85,6 +86,7 @@
         训练损失 $\ell$ & $\ell$ 为 NaN 或 Inf & 数值崩溃 \\
         策略 KL 散度 & $\text{KL} > \kappa = 10$ & 策略偏离过远 \\
         存活组数 $R$ & $R < N$（训练组数） & 超采样池耗尽 \\
+        梯度范数 $g$ & $g$ 为 NaN／Inf，或频繁 $> 10^{2}$ & 梯度爆炸／数值崩溃 \\
         \hline
     \end{tabular}
 \end{table}
