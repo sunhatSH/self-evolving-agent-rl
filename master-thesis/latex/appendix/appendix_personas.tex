@@ -8,71 +8,72 @@
 \begin{itemize}
     \item \textbf{职业}与\textbf{偏好}：决定追问所关注的实质内容。如财务分析师要求每个数字可对账，运维工程师关心修复是否真正生效。
     \item \textbf{观察焦点}：两个二元维度的组合——\textbf{细节／整体}决定是追究单个数值还是审视交付物全貌，\textbf{内容／形式}决定是关注结果正确性还是关注排版与规范性。四种组合使不同人设从同一份观察报告中提取不同的追问依据。
-    \item \textbf{语气}：平和／中性／急躁，仅影响表述风格，与耐心程度相互独立。
-    \item \textbf{耐心} $P_0$ \textbf{与衰减系数} $d_0$：$P_0$ 为初始耐心值，每轮不满意后耐心乘以 $d_0$ 衰减，低于阈值即结束会话。放弃前的追问轮数约为 $\log_2(P_0 / d_0)$，故 $P_0$ 大、$d_0$ 接近 1 的人设会反复追问，$P_0$ 小、$d_0$ 低的人设则很快终止。该机制使会话长度随人设自然分化，而非由固定轮数上限统一截断。
+    \item \textbf{语气}：平和／中性／急躁，仅影响表述风格，与关注内容相互独立。
 \end{itemize}
 
-全部 42 个人设及其参数如表~\ref{tab:personas} 所示。
+人设对追问行为的约束并非通过固定轮数上限实现，而是由人设自身的职业标准决定何时满意：提问者需从该人设的视角审视交付物，判断具有该职业背景与偏好的用户是否会真正接受当前结果；若观察报告中存在未解决的问题，则必须继续追问而不得结束会话。会话长度因而随人设的严苛程度自然分化。
 
-\begin{longtable}{clp{3.1cm}cccc}
+全部 42 个人设如表~\ref{tab:personas} 所示。
+
+\begin{longtable}{clp{4.2cm}cc}
     \caption{提问者人设库（共 42 个人设）}
     \label{tab:personas} \\
     \hline
-    编号 & 人设名称 & 职业 & 观察焦点 & 语气 & $P_0$ & $d_0$ \\
+    编号 & 人设名称 & 职业 & 观察焦点 & 语气 \\
     \hline
     \endfirsthead
-    \multicolumn{7}{l}{\small 续表~\thetable：提问者人设库} \\
+    \multicolumn{5}{l}{\small 续表~\thetable：提问者人设库} \\
     \hline
-    编号 & 人设名称 & 职业 & 观察焦点 & 语气 & $P_0$ & $d_0$ \\
+    编号 & 人设名称 & 职业 & 观察焦点 & 语气 \\
     \hline
     \endhead
     \hline
-    \multicolumn{7}{r}{\small 续下页} \\
+    \multicolumn{5}{r}{\small 续下页} \\
     \endfoot
     \hline
     \endlastfoot
-        1 & Mei the financial analyst & Corporate financial analyst & 细节×内容 & 平和 & 5.7 & 0.63 \\
-        2 & Greg the banker & Investment-bank executive & 整体×内容 & 急躁 & 7.1 & 0.71 \\
-        3 & Omar the procurement specialist & Procurement specialist & 细节×内容 & 中性 & 5.9 & 0.64 \\
-        4 & Hana the auditor & Auditor & 细节×内容 & 平和 & 9.3 & 0.86 \\
-        5 & Diego the risk manager & Risk manager & 整体×内容 & 中性 & 5.2 & 0.59 \\
-        6 & Raj the SRE & Site reliability / sysops engineer & 细节×内容 & 急躁 & 3.7 & 0.49 \\
-        7 & Sven the sysadmin & System administrator & 细节×内容 & 中性 & 5.6 & 0.61 \\
-        8 & Tariq the network engineer & Network engineer & 细节×内容 & 平和 & 7.4 & 0.74 \\
-        9 & Bjorn the devops lead & DevOps lead & 整体×内容 & 中性 & 4.7 & 0.56 \\
-        10 & Ken the compliance officer & Compliance / risk officer & 细节×内容 & 平和 & 3.3 & 0.47 \\
-        11 & Carlos the project manager & Project manager & 整体×内容 & 中性 & 5.4 & 0.60 \\
-        12 & Marcus the operations lead & Operations lead & 整体×内容 & 急躁 & 4.5 & 0.55 \\
-        13 & Tom the startup founder & Early-stage startup founder & 整体×内容 & 急躁 & 3.2 & 0.46 \\
-        14 & Lena the process consultant & Process-optimization consultant & 整体×内容 & 平和 & 9.5 & 0.87 \\
-        15 & Felix the scheduler & Scheduling coordinator & 细节×内容 & 中性 & 7.3 & 0.72 \\
-        16 & Nadia the project assistant & Project assistant & 整体×内容 & 平和 & 8.3 & 0.79 \\
-        17 & Priya the support engineer & Customer support engineer & 细节×内容 & 中性 & 6.9 & 0.70 \\
-        18 & Yusuf the call-center lead & Call-center team lead & 整体×内容 & 急躁 & 3.9 & 0.50 \\
-        19 & Mira the conversation designer & Conversation experience designer & 整体×形式 & 平和 & 8.8 & 0.82 \\
-        20 & Zane the sales director & Sales director & 整体×内容 & 急躁 & 3.5 & 0.48 \\
-        21 & Sophie the content editor & Content / communications editor & 细节×形式 & 中性 & 6.6 & 0.68 \\
-        22 & Yuki the UX writer & UX writer & 整体×形式 & 平和 & 8.6 & 0.81 \\
-        23 & Elif the PR manager & PR manager & 整体×形式 & 急躁 & 3.0 & 0.45 \\
-        24 & Pablo the copywriter & Marketing copywriter & 整体×形式 & 中性 & 5.0 & 0.58 \\
-        25 & Grace the speechwriter & Speechwriter & 整体×形式 & 平和 & 9.7 & 0.88 \\
-        26 & Aiko the trainer & Corporate trainer & 整体×形式 & 平和 & 8.5 & 0.80 \\
-        27 & Bella the data analyst & Data analyst & 细节×内容 & 中性 & 8.1 & 0.78 \\
-        28 & Dr. Lena the researcher & Academic researcher & 细节×内容 & 平和 & 9.1 & 0.85 \\
-        29 & Arjun the intelligence analyst & Intelligence analyst & 细节×内容 & 平和 & 10.0 & 0.90 \\
-        30 & Wei the research assistant & Research assistant & 细节×内容 & 中性 & 7.6 & 0.75 \\
-        31 & Sara the consultant & Management consultant & 整体×内容 & 急躁 & 4.0 & 0.52 \\
-        32 & Nina the QA tester & Quality assurance tester & 细节×内容 & 平和 & 9.8 & 0.89 \\
-        33 & Igor the statistician & Statistician & 细节×内容 & 平和 & 9.0 & 0.83 \\
-        34 & Tania the growth analyst & Growth analyst & 细节×内容 & 中性 & 6.4 & 0.67 \\
-        35 & Hugo the experiment scientist & Experiment scientist & 细节×内容 & 中性 & 8.0 & 0.77 \\
-        36 & Ravi the BI engineer & Business-intelligence engineer & 整体×内容 & 急躁 & 4.4 & 0.54 \\
-        37 & Anna the office assistant & Executive office assistant & 整体×形式 & 平和 & 6.8 & 0.69 \\
-        38 & Leo the generalist intern & Generalist intern & 整体×内容 & 中性 & 6.2 & 0.66 \\
-        39 & Mona the admin lead & Administrative lead & 整体×形式 & 中性 & 4.9 & 0.57 \\
-        40 & Theo the secretary & Secretary & 细节×形式 & 平和 & 7.8 & 0.76 \\
-        41 & Carmen the HR specialist & HR specialist & 细节×形式 & 中性 & 6.1 & 0.65 \\
-        42 & Boris the legal counsel & Legal counsel & 细节×内容 & 中性 & 4.2 & 0.53 \\
+        1 & Mei the financial analyst & Corporate financial analyst & 细节×内容 & 平和 \\
+        2 & Greg the banker & Investment-bank executive & 整体×内容 & 急躁 \\
+        3 & Omar the procurement specialist & Procurement specialist & 细节×内容 & 中性 \\
+        4 & Hana the auditor & Auditor & 细节×内容 & 平和 \\
+        5 & Diego the risk manager & Risk manager & 整体×内容 & 中性 \\
+        6 & Raj the SRE & Site reliability / sysops engineer & 细节×内容 & 急躁 \\
+        7 & Sven the sysadmin & System administrator & 细节×内容 & 中性 \\
+        8 & Tariq the network engineer & Network engineer & 细节×内容 & 平和 \\
+        9 & Bjorn the devops lead & DevOps lead & 整体×内容 & 中性 \\
+        10 & Ken the compliance officer & Compliance / risk officer & 细节×内容 & 平和 \\
+        11 & Carlos the project manager & Project manager & 整体×内容 & 中性 \\
+        12 & Marcus the operations lead & Operations lead & 整体×内容 & 急躁 \\
+        13 & Tom the startup founder & Early-stage startup founder & 整体×内容 & 急躁 \\
+        14 & Lena the process consultant & Process-optimization consultant & 整体×内容 & 平和 \\
+        15 & Felix the scheduler & Scheduling coordinator & 细节×内容 & 中性 \\
+        16 & Nadia the project assistant & Project assistant & 整体×内容 & 平和 \\
+        17 & Priya the support engineer & Customer support engineer & 细节×内容 & 中性 \\
+        18 & Yusuf the call-center lead & Call-center team lead & 整体×内容 & 急躁 \\
+        19 & Mira the conversation designer & Conversation experience designer & 整体×形式 & 平和 \\
+        20 & Zane the sales director & Sales director & 整体×内容 & 急躁 \\
+        21 & Sophie the content editor & Content / communications editor & 细节×形式 & 中性 \\
+        22 & Yuki the UX writer & UX writer & 整体×形式 & 平和 \\
+        23 & Elif the PR manager & PR manager & 整体×形式 & 急躁 \\
+        24 & Pablo the copywriter & Marketing copywriter & 整体×形式 & 中性 \\
+        25 & Grace the speechwriter & Speechwriter & 整体×形式 & 平和 \\
+        26 & Aiko the trainer & Corporate trainer & 整体×形式 & 平和 \\
+        27 & Bella the data analyst & Data analyst & 细节×内容 & 中性 \\
+        28 & Dr. Lena the researcher & Academic researcher & 细节×内容 & 平和 \\
+        29 & Arjun the intelligence analyst & Intelligence analyst & 细节×内容 & 平和 \\
+        30 & Wei the research assistant & Research assistant & 细节×内容 & 中性 \\
+        31 & Sara the consultant & Management consultant & 整体×内容 & 急躁 \\
+        32 & Nina the QA tester & Quality assurance tester & 细节×内容 & 平和 \\
+        33 & Igor the statistician & Statistician & 细节×内容 & 平和 \\
+        34 & Tania the growth analyst & Growth analyst & 细节×内容 & 中性 \\
+        35 & Hugo the experiment scientist & Experiment scientist & 细节×内容 & 中性 \\
+        36 & Ravi the BI engineer & Business-intelligence engineer & 整体×内容 & 急躁 \\
+        37 & Anna the office assistant & Executive office assistant & 整体×形式 & 平和 \\
+        38 & Leo the generalist intern & Generalist intern & 整体×内容 & 中性 \\
+        39 & Mona the admin lead & Administrative lead & 整体×形式 & 中性 \\
+        40 & Theo the secretary & Secretary & 细节×形式 & 平和 \\
+        41 & Carmen the HR specialist & HR specialist & 细节×形式 & 中性 \\
+        42 & Boris the legal counsel & Legal counsel & 细节×内容 & 中性 \\
 \end{longtable}
 
-人设库的分布特征为：观察焦点以“细节×内容”（18 个）与“整体×内容”（13 个）为主，关注形式的人设（11 个）用于覆盖排版与规范类追问；语气分布为平和 16 个、中性 17 个、急躁 9 个；耐心 $P_0$ 的取值范围为 3.0$\sim$10.0，衰减系数 $d_0$ 的范围为 0.45$\sim$0.90。该分布使自产生任务在内容深度、形式规范与会话长度三个方向上均具备多样性，避免追问风格集中于单一模式。
+人设库的分布特征为：观察焦点以“细节×内容”（18 个）与“整体×内容”（13 个）为主，关注形式的人设（11 个）用于覆盖排版与规范类追问；语气分布为平和 16 个、中性 17 个、急躁 9 个。该分布使自产生任务在内容深度与形式规范两个方向上均具备多样性，避免追问风格集中于单一模式。
