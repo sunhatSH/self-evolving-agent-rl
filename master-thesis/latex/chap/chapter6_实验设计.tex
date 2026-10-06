@@ -33,6 +33,26 @@
 
 注：系统并未在达成监控系统设置的终止条件之外限制训练步数，但为了实验规模可控，可与传统 RL 实验对比验证效果，实验在 50 步时手动结束。
 
+稳定性监控的六项判据（见第~\ref{sec:stability} 节）在本文实验中的阈值取值如表~\ref{tab:stop_thresholds} 所示：任一判据触发时，系统跳过跨步任务生成，训练循环在下一步检测到终止标志后退出。
+
+\begin{table}[htbp]
+    \centering
+    \caption{自动终止判据的阈值取值（本文实验设定）}
+    \label{tab:stop_thresholds}
+    \begin{tabular}{lll}
+        \hline
+        监控指标 & 终止判据 & 失稳含义 \\
+        \hline
+        奖励标准差 $\sigma_r$ & $\sigma_r < \epsilon_r = 10^{-6}$ & 策略多样性坍缩 \\
+        优势标准差 $\sigma_A$ & $\sigma_A < \epsilon_A = 10^{-6}$ & 无有效梯度信号 \\
+        训练损失 $\ell$ & $\ell$ 为 NaN 或 Inf & 数值崩溃 \\
+        策略 KL 散度 & $\text{KL} > \kappa = 10$ & 策略偏离过远 \\
+        存活组数 $R$ & $R < N$（训练组数） & 超采样池耗尽 \\
+        梯度范数 $g$ & $g$ 为 NaN／Inf，或频繁 $> 10^{2}$ & 梯度爆炸／数值崩溃 \\
+        \hline
+    \end{tabular}
+\end{table}
+
 \textbf{训练奖励评分函数。} 训练过程中的奖励由本文的差分驱动评分函数产生（机制详见第四章第~\ref{sec:diff_reward} 节）。最终奖励为
 \begin{equation}
 R = \big(0.6\,T + 0.4\,C\big) \times S_{\text{safe}},
