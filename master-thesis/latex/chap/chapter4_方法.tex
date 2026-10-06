@@ -374,43 +374,27 @@ GRPO 的梯度由组内优势驱动：当一组轨迹全部成功或全部失败
     \item \textbf{策略 KL 散度}：当前策略相对参考策略的偏离程度。过大表示策略偏离过远，训练不稳定。
     \item \textbf{训练损失}：优化目标在当前批次上的损失值。出现 NaN／Inf 表示数值崩溃。
     \item \textbf{存活组数}：淘汰后仍保留的组数。持续低于训练组数表明超采样池耗尽，自进化难以为继。
-    \item \textbf{梯度范数}：参数梯度的整体幅度，直接反映训练信号强度。
+    \item \textbf{梯度范数}：参数梯度的整体幅度，直接反映训练信号强度。该指标需双向判读——持续过小表明梯度消失、模型几乎不再更新；频繁出现远超常规量级的尖峰则表明梯度爆炸，二者均意味着训练已无法有效推进。
 \end{itemize}
 
-六项指标均取自训练循环已有的中间量：奖励与优势标准差来自选组统计，KL 散度来自策略更新后的比对，梯度范数来自反向传播时的裁剪统计，因此监控本身不引入额外的前向或采样开销。其中梯度范数的数量级包含较丰富的诊断信息，常见判读区间如表~\ref{tab:grad_norm_guide} 所示。
-
-\begin{table}[htbp]
-    \centering
-    \caption{梯度范数的常见判读区间}
-    \label{tab:grad_norm_guide}
-    \begin{tabular}{ll}
-        \hline
-        梯度范数区间 & 典型含义 \\
-        \hline
-        长期 $< 10^{-6} \sim 10^{-7}$ & 可能梯度消失、饱和、死神经元或几乎不学习 \\
-        $10^{-3} \sim 10^{1}$ & 多数任务中较常见，通常可接受 \\
-        Transformer/LLM 训练 & 常见约 $0.1 \sim 5$，梯度裁剪阈值常取 1.0 \\
-        频繁 $> 10^{2}$ 或尖峰很大 & 可能梯度爆炸，需检查学习率、warmup、loss scale 与数据 \\
-        NaN／Inf & 异常，必须处理 \\
-        \hline
-    \end{tabular}
-\end{table}
+六项指标均取自训练循环已有的中间量：奖励与优势标准差来自选组统计，KL 散度来自策略更新后的比对，梯度范数来自反向传播时的裁剪统计，因此监控本身不引入额外的前向或采样开销。
 
 \subsection{终止判据}
 
-判定逻辑采用“任一触发即终止”而非“多数触发方终止”：各指标对应不同的失稳模式，任一指标单独触发即表明自进化已无法产生有效信号，继续运行仅造成计算资源浪费。阈值类型上，两个标准差采用绝对值下界（趋近零时报警），KL 散度与训练损失采用上界，存活组数采用与训练组数的相对比较。具体阈值取值属实验配置，于下一章给出。判定逻辑如算法~\ref{alg:stability} 所示。
+判定逻辑采用“任一触发即终止”而非“多数触发方终止”：各指标对应不同的失稳模式，任一指标单独触发即表明自进化已无法产生有效信号，继续运行仅造成计算资源浪费。阈值类型上，两个标准差采用绝对值下界（趋近零时报警），KL 散度与训练损失采用上界，梯度范数因需双向判读而采用双侧界（过小判为梯度消失、过大判为梯度爆炸），存活组数采用与训练组数的相对比较。具体阈值取值属实验配置，于下一章给出。判定逻辑如算法~\ref{alg:stability} 所示。
 
 \begin{algorithm}[htbp]
 \caption{自进化稳定性监控与自动终止}
 \label{alg:stability}
 \begin{algorithmic}[1]
-\Require 本步奖励 $\{r_{ij}\}$、优势 $\{\hat{A}_{ij}\}$、策略 KL、训练损失 $\ell$、存活组数 $R$；阈值 $\epsilon_r,\epsilon_A,\kappa$ 与训练组数 $N$
+\Require 本步奖励 $\{r_{ij}\}$、优势 $\{\hat{A}_{ij}\}$、策略 KL、训练损失 $\ell$、梯度范数 $g$、存活组数 $R$；阈值 $\epsilon_r,\epsilon_A,\kappa,g_{\min},g_{\max}$ 与训练组数 $N$
 \Ensure 是否终止的布尔标志 $\text{stop}$
 \State $\sigma_r \gets \textproc{Std}(\{r_{ij}\})$；\ $\sigma_A \gets \textproc{Std}(\{\hat{A}_{ij}\})$ \Comment{均取自现有计算路径，零额外开销}
 \If{$\sigma_r < \epsilon_r$} \Return \textbf{true} \Comment{奖励多样性坍缩（Echo Trap）}
 \ElsIf{$\sigma_A < \epsilon_A$} \Return \textbf{true} \Comment{无有效梯度信号}
 \ElsIf{$\textproc{IsNaN}(\ell)\ \textbf{or}\ \textproc{IsInf}(\ell)$} \Return \textbf{true} \Comment{数值崩溃}
 \ElsIf{$\text{KL} > \kappa$} \Return \textbf{true} \Comment{策略偏离过远}
+\ElsIf{$\textproc{IsNaN}(g)\ \textbf{or}\ g > g_{\max}\ \textbf{or}\ g < g_{\min}$} \Return \textbf{true} \Comment{梯度爆炸或消失}
 \ElsIf{$R < N$} \Return \textbf{true} \Comment{超采样池耗尽}
 \EndIf
 \State \Return \textbf{false} \Comment{各指标均正常，继续自进化}
