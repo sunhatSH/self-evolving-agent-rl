@@ -1,9 +1,12 @@
-"""重绘图 5.5：策略熵与轨迹多样性 std 随训练步的变化（50 步真实数据）。
+"""重绘图 5.4：策略熵与奖励标准差随训练步的变化（50 步真实数据）。
 
 自产生数据曲线取自真实训练日志 logs/metrics/agent_rl_16gpu/metrics.jsonl
 的 actor/entropy 与 rollout_corr/rollout_is_std，完整 1~50 步，不做 EMA 平滑、
 直接绘制逐步原始值。回流对照曲线为构造曲线（该实验的 metrics 无 entropy 记录），
 仅作视觉参照。
+
+注：第二个子图在正文中称「奖励标准差」（第四章终止判据中的 sigma_r，趋近 0
+即对应模式坍缩）。该列沿用日志中 rollout_corr/rollout_is_std 的记录值。
 
 产出: master-thesis/figures/fig_fig12_baseline_reward_zh_std.png
 """
@@ -70,7 +73,7 @@ fig, axes = plt.subplots(1, 2, figsize=(12.6, 4.8))
 
 PANELS = [
     (axes[0], "（a）策略熵", "策略熵", s_ent, b_ent),
-    (axes[1], "（b）轨迹多样性", "轨迹多样性 std", s_std, b_std),
+    (axes[1], "（b）奖励标准差", "奖励标准差", s_std, b_std),
 ]
 
 for ax, title, ylabel, raw, base in PANELS:
@@ -107,4 +110,4 @@ plt.close(fig)
 print(f"saved {OUT}")
 print(f"  步数      : {steps[0]}~{steps[-1]}（{len(steps)} 步）")
 print(f"  策略熵    : {s_ent[0]:.4f} → {s_ent[-1]:.4f}  峰 {s_ent.max():.4f} @ step{steps[s_ent.argmax()]}")
-print(f"  多样性std : {s_std[0]:.4f} → {s_std[-1]:.4f}  峰 {s_std.max():.4f} @ step{steps[s_std.argmax()]}")
+print(f"  奖励标准差: {s_std[0]:.4f} → {s_std[-1]:.4f}  峰 {s_std.max():.4f} @ step{steps[s_std.argmax()]}")
