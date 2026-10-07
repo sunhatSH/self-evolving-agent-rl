@@ -32,7 +32,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SRC = os.path.join(ROOT, "logs", "metrics", "agent_rl_16gpu", "metrics.jsonl")
 OUT = os.path.join(ROOT, "master-thesis", "figures", "fig_fig12_baseline_reward_zh_std.png")
 
-PLATEAU_FROM = 18  # 平台期起点（衰减期 2~17，平台期 18~50）
+PLATEAU_FROM = 11  # 稳步期起点（探索期 2~10，稳步期 11~50）
 
 
 def ema(x, a=0.2):
@@ -101,9 +101,9 @@ for ax, title, ylabel, raw, smooth, base in PANELS:
     ax.set_ylim(0, raw.max() * 1.22)
     ymin, ymax = ax.get_ylim()
     ytxt = ymax - 0.045 * (ymax - ymin)
-    ax.text((steps[0] + PLATEAU_FROM) / 2, ytxt, "衰减期",
+    ax.text((steps[0] + PLATEAU_FROM) / 2, ytxt, "探索期",
             fontsize=9, color="#546E7A", ha="center", va="center")
-    ax.text((PLATEAU_FROM + steps[-1]) / 2, ytxt, "平台期（趋势趋平）",
+    ax.text((PLATEAU_FROM + steps[-1]) / 2, ytxt, "稳步期（趋势趋平）",
             fontsize=9, color=BLUE, ha="center", va="center")
 
     ax.legend(loc="upper right", fontsize=9, bbox_to_anchor=(1.0, 0.90),
