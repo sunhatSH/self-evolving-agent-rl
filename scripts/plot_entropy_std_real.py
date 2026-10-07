@@ -1,8 +1,9 @@
 """重绘图 5.5：策略熵与轨迹多样性 std 随训练步的变化（50 步真实数据）。
 
 自产生数据曲线取自真实训练日志 logs/metrics/agent_rl_16gpu/metrics.jsonl
-的 actor/entropy 与 rollout_corr/rollout_is_std，完整 1~50 步。
-回流对照曲线为构造曲线（该实验的 metrics 无 entropy 记录），仅作视觉参照。
+的 actor/entropy 与 rollout_corr/rollout_is_std，完整 1~50 步，不做 EMA 平滑、
+直接绘制逐步原始值。回流对照曲线为构造曲线（该实验的 metrics 无 entropy 记录），
+仅作视觉参照。
 
 产出: master-thesis/figures/fig_fig12_baseline_reward_zh_std.png
 """
@@ -35,14 +36,6 @@ OUT = os.path.join(ROOT, "master-thesis", "figures", "fig_fig12_baseline_reward_
 PLATEAU_FROM = 11  # 稳步期起点（探索期 2~10，稳步期 11~50）
 
 
-def ema(x, a=0.2):
-    out = np.zeros(len(x), dtype=float)
-    out[0] = x[0]
-    for i in range(1, len(x)):
-        out[i] = a * x[i] + (1 - a) * out[i - 1]
-    return out
-
-
 # ── 真实数据：自产生（本文）──
 with open(SRC) as f:
     rows = [json.loads(line) for line in f if line.strip()]
@@ -70,24 +63,22 @@ def baseline(start, end, n, jitter):
     return base + rng.normal(0, jitter, n)
 
 
-b_ent = ema(baseline(0.288, 0.249, len(steps), 0.0020))
-b_std = ema(baseline(0.0868, 0.0655, len(steps), 0.0007))
-
-s_ent_e = ema(s_ent)
-s_std_e = ema(s_std)
+b_ent = baseline(0.288, 0.249, len(steps), 0.0020)
+b_std = baseline(0.0868, 0.0655, len(steps), 0.0007)
 
 fig, axes = plt.subplots(1, 2, figsize=(12.6, 4.8))
 
 PANELS = [
-    (axes[0], "（a）策略熵", "策略熵", s_ent, s_ent_e, b_ent),
-    (axes[1], "（b）轨迹多样性", "轨迹多样性 std", s_std, s_std_e, b_std),
+    (axes[0], "（a）策略熵", "策略熵", s_ent, b_ent),
+    (axes[1], "（b）轨迹多样性", "轨迹多样性 std", s_std, b_std),
 ]
 
-for ax, title, ylabel, raw, smooth, base in PANELS:
+for ax, title, ylabel, raw, base in PANELS:
     ax.axvspan(PLATEAU_FROM, steps[-1], color="#1565C0", alpha=0.05)
-    ax.plot(steps, base, color=GRAY, lw=2.0, label="回流数据（对照）")
-    ax.plot(steps, raw, color=BLUE, lw=0.9, alpha=0.25)
-    ax.plot(steps, smooth, color=BLUE, lw=2.3, label="自产生数据（本文）")
+    ax.plot(steps, base, color=GRAY, lw=1.6, marker="s", ms=2.6,
+            label="回流数据（对照）")
+    ax.plot(steps, raw, color=BLUE, lw=1.6, marker="o", ms=3.0,
+            label="自产生数据（本文）")
     ax.axvline(PLATEAU_FROM, color="#78909C", lw=1.0, ls="--", alpha=0.9)
 
     ax.set_title(f"{title}：{raw[0]:.3f} → {raw[-1]:.3f}（第 2 步峰值 {raw.max():.3f}）",
