@@ -41,7 +41,7 @@
     \centering
     \caption{自动终止判据的阈值取值（本文实验设定）}
     \label{tab:stop_thresholds}
-    \begin{tabular}{lll}
+    \begin{tabularx}{\textwidth}{l >{\raggedright\arraybackslash\hsize=0.85\hsize}X >{\raggedright\arraybackslash\hsize=1.15\hsize}X}
         \hline
         监控指标 & 终止判据 & 失稳含义 \\
         \hline
@@ -52,7 +52,7 @@
         存活组数 $R$ & $R < N$（训练组数） & 超采样池耗尽 \\
         梯度范数 $g$ & $g$ 为 NaN／Inf，频繁 $> 10^{2}$，或持续 $< 10^{-6}$ & 梯度爆炸／数值崩溃／梯度消失 \\
         \hline
-    \end{tabular}
+    \end{tabularx}
 \end{table}
 
 \subsection{训练奖励评分函数}
