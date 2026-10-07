@@ -97,10 +97,8 @@ for ax, title, ylabel, raw, smooth, base in PANELS:
     ax.grid(alpha=0.3)
     ax.set_xlim(steps[0], steps[-1])
 
-    # 给顶部留出阶段标注的空间
-    ymin, ymax = ax.get_ylim()
-    span = ymax - ymin
-    ax.set_ylim(ymin, ymax + 0.17 * span)
+    # 纵轴自 0 起，并给顶部留出阶段标注的空间
+    ax.set_ylim(0, raw.max() * 1.22)
     ymin, ymax = ax.get_ylim()
     ytxt = ymax - 0.045 * (ymax - ymin)
     ax.text((steps[0] + PLATEAU_FROM) / 2, ytxt, "衰减期",
