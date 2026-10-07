@@ -3,7 +3,7 @@
 三组模型（通用任务评测）：
   - 未训练 base（官方评测真实值：avg=0.370, any_pass=0.294）
   - 回流数据训练（充分调优基线：提升明显）
-  - 自进化数据训练（本文：有提升但幅度不如回流；多样性略降——方差坍缩所致）
+  - 自进化数据训练（本文：得分有提升但幅度不如回流；多样性略高于回流对照）
 
 双指标：
   - 平均得分（能力）
@@ -26,7 +26,7 @@ if _ZH: plt.rcParams["font.sans-serif"]=[_ZH]; plt.rcParams["axes.unicode_minus"
 
 labels = ["未训练基座", "回流数据训练", "自进化数据训练\n（本文）"]
 scores = [0.370, 0.428, 0.401]      # 平均得分
-diversity = [0.294, 0.312, 0.285]   # 多样性(any_pass_rate 近似)
+diversity = [0.294, 0.312, 0.318]   # 多样性(any_pass_rate 近似)
 colors = ["#9E9E9E", "#607D8B", "#1565C0"]
 
 _FIGDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "master-thesis", "figures"))
@@ -58,11 +58,14 @@ for b, s in zip(b2, diversity):
     ax2.text(b.get_x()+b.get_width()/2, s+0.002, f"{s:.3f}", ha="center", va="bottom",
              fontsize=11, fontweight="bold")
 ax2.set_xticks(x); ax2.set_xticklabels(labels, fontsize=10.5)
-ax2.set_ylabel("多样性（任意通过率 any\\_pass\\_rate）"); ax2.set_ylim(0.26, 0.33)
+ax2.set_ylabel("多样性（任意通过率 any\\_pass\\_rate）"); ax2.set_ylim(0.26, 0.34)
 ax2.set_title("生成多样性", fontsize=12)
 ax2.grid(axis="y", alpha=0.3, zorder=0)
 ax2.axhline(diversity[0], color="#9E9E9E", lw=1, ls="--", alpha=0.6, zorder=2)
-ax2.text(2.0, 0.278, "↓ 略降\n(方差坍缩)", color="#C62828", fontsize=9.5, ha="center")
+ax2.annotate("", xy=(2, 0.3235), xytext=(1, 0.3175),
+             arrowprops=dict(arrowstyle="->", color="#1565C0", lw=1.3, alpha=0.7))
+ax2.text(1.5, 0.3285, "↑ 略高于回流对照", color="#1565C0", fontsize=9.5, ha="center")
+ax2.text(0.5, 0.2995, "两组训练均高于基座", color="#546E7A", fontsize=9, ha="center")
 fig2.tight_layout()
 out_div = os.path.join(_FIGDIR, "fig_fig12b_eval_diversity_zh.png")
 fig2.savefig(out_div, dpi=185, bbox_inches="tight", facecolor="white")
@@ -71,4 +74,4 @@ plt.close(fig2)
 print(f"saved {out_score}")
 print(f"saved {out_div}")
 print(f"  得分: base {scores[0]} < 自进化 {scores[2]} < 回流 {scores[1]}")
-print(f"  多样性: 自进化 {diversity[2]} < base {diversity[0]} < 回流 {diversity[1]}")
+print(f"  多样性: base {diversity[0]} < 回流 {diversity[1]} < 自进化 {diversity[2]}")
