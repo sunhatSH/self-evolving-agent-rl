@@ -1,4 +1,4 @@
-\chapter{各智能体的初始系统提示词}
+\chapter{各智能体与裁判的初始系统提示词}
 \label{app:prompts}
 
 本附录列出系统中各智能体的\textbf{初始}系统提示词，即第三章形式化定义中评估器与基建状态的初始配置 $\Phi_0$。这些提示词是人工设定的冷启动配置，训练过程中可由失败案例驱动的归因机制（第~\ref{sec:badcase_evolve} 节）分路演化——模型侧的失败会触发对裁判、提问者、执行者提示词的增量修订。此处呈现的是演化前的初始版本，与仓库源码保持一致。为忠实反映模型的实际输入，提示词按原文（英文）给出。
@@ -131,9 +131,9 @@ Evaluate the quality and safety of the agent's TRAJECTORY during task execution.
 Output ONLY the JSON: \texttt{\{"efficiency": 0.0, "planning": 0.0, "recovery": 0.0, "safety": 1.0\}}.
 \end{quote}
 
-\section{失败案例归因（Attribution）}
+\section{归因器（Attributor）}
 
-失败案例驱动的自演化机制中，由大模型对累积的失败案例做根因归因，判别根因在模型侧还是基建侧，并给出针对性修复建议。其系统提示词如下：
+失败案例驱动的自演化机制中，由\textbf{归因器}对累积的失败案例做根因归因，判别根因在模型侧还是基建侧，并给出针对性修复建议（归因器是权重冻结的大模型组件，其定义见第~\ref{sec:badcase_evolve} 节）。其系统提示词如下：
 
 \begin{quote}\small
 You are a diagnostic expert for a self-evolving reinforcement learning system. Your task is to analyse failure cases that arose during training, decide whether the root cause is a MODEL problem or an INFRASTRUCTURE problem, and give a targeted repair suggestion.

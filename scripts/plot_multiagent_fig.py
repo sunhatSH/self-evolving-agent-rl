@@ -1,10 +1,10 @@
-"""重绘图 4.6：多智能体协作机制（四智能体版，补入裁判）。
+"""重绘图 4.6：多智能体协作机制（三智能体 + 裁判评估模块）。
 
-原 AI 生成图仅含执行者／观察者／提问者三个智能体，缺少裁判（Reward Judge）。
-本脚本以 matplotlib 确定性重绘，按第 4.4 节的四角色分工呈现：
-  执行者（蓝，被训练策略）→ 观察者（绿，确定性取证）
-                           ├→ 裁判（青，冻结，据差分评分 → 奖励）
-                           └→ 提问者（橙，人设驱动 → 下一轮任务，回灌执行者）
+本文系统含执行者／观察者／提问者三个协同智能体；裁判为独立于三者的外部评估模块，
+不计入智能体，故图中只对三个智能体编号。本脚本以 matplotlib 确定性重绘：
+  ① 执行者（蓝，被训练策略）→ ② 观察者（绿，确定性取证）
+                            ├→ 裁判（青，冻结评估模块，据差分评分 → 奖励）
+                            └→ ③ 提问者（橙，人设驱动 → 下一轮任务，回灌执行者）
 
 产出: master-thesis/figures/fig_fig16_multiagent_zh.png
 """
@@ -19,7 +19,7 @@ from matplotlib.font_manager import fontManager
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 _ZH = None
-for f in ["Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Zen Hei", "SimHei"]:
+for f in ["Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Zen Hei", "SimHei", "Arial Unicode MS"]:
     if f in {x.name for x in fontManager.ttflist}:
         _ZH = f
         break
@@ -116,10 +116,10 @@ txt(65.7, 30.7, "客观状态报告", 9.8, GREEN, "bold")
 
 arrow(65.7, 37.0, 65.7, 34.8, GREEN, 1.5)
 
-# ════════ 裁判（新增）════════
-box(89, 42, 39, 24, TEAL_L, TEAL, lw=1.8, r=2)
-txt(108.5, 63.2, "③ 裁判 Reward Judge", 11.5, TEAL, "bold")
-txt(108.5, 60.2, "外部冻结大模型，独立于被训练策略", 8.8, TEAL)
+# ════════ 裁判（评估模块，非智能体）════════
+box(89, 42, 39, 24, TEAL_L, TEAL, lw=1.8, r=2, ls="--")
+txt(108.5, 63.2, "裁判 Reward Judge", 11.5, TEAL, "bold")
+txt(108.5, 60.2, "外部冻结评估模块（不计入智能体），独立于被训练策略", 8.3, TEAL)
 
 box(91, 50.6, 35, 7.4, "white", TEAL, lw=1.3, r=1.0)
 txt(108.5, 56.2, "以状态差分为评分证据", 9.5, TEAL, "bold")
@@ -134,7 +134,7 @@ txt(84.6, 48.9, "差分证据", 8.8, TEAL)
 
 # ════════ 提问者 ════════
 box(89, 12, 39, 24, ORANGE_L, ORANGE, lw=1.8, r=2)
-txt(108.5, 33.2, "④ 提问者 Questioner", 11.5, ORANGE, "bold")
+txt(108.5, 33.2, "③ 提问者 Questioner", 11.5, ORANGE, "bold")
 txt(108.5, 30.2, "人设驱动的模拟用户（42 个人设随机抽取）", 8.5, ORANGE)
 
 box(91, 21.4, 35, 6.6, "white", ORANGE, lw=1.3, r=1.0)
@@ -154,7 +154,7 @@ txt(58, 8.6, "作为下一轮任务输入（沙箱状态跨步继承）", 9.5, O
 # ════════ 图例 ════════
 leg = [mpatches.Patch(facecolor=BLUE_L, edgecolor=BLUE, label="执行者（训练对象）"),
        mpatches.Patch(facecolor=GREEN_L, edgecolor=GREEN, label="观察者（取证）"),
-       mpatches.Patch(facecolor=TEAL_L, edgecolor=TEAL, label="裁判（评分）"),
+       mpatches.Patch(facecolor=TEAL_L, edgecolor=TEAL, label="裁判（评估模块）"),
        mpatches.Patch(facecolor=ORANGE_L, edgecolor=ORANGE, label="提问者（追问）")]
 ax.legend(handles=leg, loc="lower left", bbox_to_anchor=(0.005, 0.005),
           fontsize=8.8, ncol=1, framealpha=0.95, edgecolor="#CCC")

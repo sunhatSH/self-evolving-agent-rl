@@ -6,7 +6,7 @@ from matplotlib.patches import FancyBboxPatch
 
 _ZH = None
 from matplotlib.font_manager import fontManager
-for f in ["Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Zen Hei", "Microsoft YaHei", "SimHei"]:
+for f in ["Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Zen Hei", "Microsoft YaHei", "SimHei", "Arial Unicode MS"]:
     if f in {x.name for x in fontManager.ttflist}:
         _ZH = f; break
 if _ZH:
@@ -45,7 +45,7 @@ ORANGE="#FDEBD8"; ORANGEE="#E8963A"; GREEN="#E4F3E5"; GREENE="#4CAF50"
 # 主链(上半, y=4.4): 收集 → 触发 → 归因
 box(1.5, 4.4, 2.4, 1.5, "① 收集失败案例", "执行失败 / 奖励异常 /\n自述与状态差分矛盾", BLUE, BLUEE)
 box(4.7, 4.4, 2.2, 1.5, "② 触发", "每 10 步\n或攒够 20 例", GRAY, GRAYE)
-box(8.0, 4.4, 2.6, 1.5, "③ 大模型归因", "结合任务意图+轨迹\n+环境证据(非规则)", PURPLE, PURPLEE)
+box(8.0, 4.4, 2.6, 1.5, "③ 归因器", "大模型归因(非规则)：结合任务意图\n+轨迹+环境证据", PURPLE, PURPLEE)
 arr(2.7, 4.4, 3.6, 4.4)
 arr(5.8, 4.4, 6.7, 4.4)
 
